@@ -93,6 +93,50 @@ static void test_time_slots(void) {
   CHECK_EQ_INT(time_slots(12, 30, false, false, s), 4);        // noon -> "12:30"
 }
 
+#include "layout.h"
+
+static void test_layout_emery(void) {
+  Layout L; layout_init(&L, 200, 228);
+  CHECK_NEAR(L.k, 1.0, 1e-6);
+  CHECK_EQ_INT(L.comp_top, 196); CHECK_EQ_INT(L.gw, 42); CHECK_EQ_INT(L.gh, 50);
+  CHECK_EQ_INT(L.boxes[0].x, 64);  CHECK_EQ_INT(L.boxes[0].y, 84);
+  CHECK_EQ_INT(L.boxes[1].x, 113); CHECK_EQ_INT(L.boxes[1].y, 84);
+  CHECK_EQ_INT(L.boxes[2].x, 50);  CHECK_EQ_INT(L.boxes[2].y, 140);
+  CHECK_EQ_INT(L.boxes[3].x, 99);  CHECK_EQ_INT(L.boxes[3].y, 140);
+  CHECK_EQ_INT(L.chalet.x, 149); CHECK_EQ_INT(L.chalet.y, 149);
+  CHECK_EQ_INT(L.chalet.w, 48);  CHECK_EQ_INT(L.chalet.h, 46);
+  CHECK_NEAR(layout_ridge_y(&L, 0), 84.0, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 100), 38.02, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 200), 8.0, 0.05);
+  CHECK_NEAR(layout_berm_y(&L, 50), 194.579, 0.05);
+  CHECK_NEAR(L.u0, -85.431, 0.1);  CHECK_NEAR(L.s0, 153.426, 0.1);
+  CHECK_NEAR(L.u1, 176.4, 0.05);
+  CHECK_NEAR(L.s_min, 0, 1e-4);    CHECK_NEAR(L.s_max, 296.8, 0.05);
+}
+
+static void test_layout_basalt(void) {
+  Layout L; layout_init(&L, 144, 168);
+  CHECK_NEAR(L.k, 0.72, 1e-6);
+  CHECK_EQ_INT(L.comp_top, 144); CHECK_EQ_INT(L.gw, 30); CHECK_EQ_INT(L.gh, 36);
+  CHECK_EQ_INT(L.boxes[0].x, 46); CHECK_EQ_INT(L.boxes[0].y, 63);
+  CHECK_EQ_INT(L.boxes[1].x, 81); CHECK_EQ_INT(L.boxes[2].x, 36);
+  CHECK_EQ_INT(L.boxes[2].y, 104); CHECK_EQ_INT(L.boxes[3].x, 71);
+  CHECK_EQ_INT(L.chalet.x, 107); CHECK_EQ_INT(L.chalet.y, 110);
+  CHECK_EQ_INT(L.chalet.w, 35);  CHECK_EQ_INT(L.chalet.h, 33);
+  CHECK_NEAR(layout_ridge_y(&L, 0), 62.0, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 72), 28.12, 0.05);
+  CHECK_NEAR(layout_berm_y(&L, 50), 142.697, 0.05);
+  CHECK_NEAR(L.u0, -61.228, 0.1); CHECK_NEAR(L.u1, 130.32, 0.05);
+  CHECK_NEAR(L.s_max, 216.0, 0.05);
+}
+
+static void test_layout_glyph_point(void) {
+  Layout L; layout_init(&L, 200, 228);
+  Vec2 top = layout_glyph_point(&L, 0, 0, 0), bot = layout_glyph_point(&L, 0, 0, 1);
+  CHECK_NEAR(top.x, 64 + 0.08 * 42, 1e-3); CHECK_NEAR(top.y, 84, 1e-3);   // tops lean right
+  CHECK_NEAR(bot.x, 64 - 0.08 * 42, 1e-3); CHECK_NEAR(bot.y, 134, 1e-3);
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -100,6 +144,9 @@ int main(void) {
   test_mulberry_matches_prototype();
   test_glyph_data();
   test_time_slots();
+  test_layout_emery();
+  test_layout_basalt();
+  test_layout_glyph_point();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
