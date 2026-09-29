@@ -76,10 +76,12 @@ static uint32_t now_ms(void) {
   return (uint32_t)s * 1000u + ms;
 }
 
-static void build_set(SkierSet *set, int h24, int m) {
+static bool build_set(SkierSet *set, int h24, int m) {
   DigitSlot slots[4];
   uint8_t n = time_slots(h24, m, settings_get()->time_24h, settings_get()->lead_zero, slots);
   skiers_build(set, &s_L, slots, n);
+  if (set->count == 0) APP_LOG(APP_LOG_LEVEL_WARNING, "skier build failed, keeping previous time");
+  return set->count > 0;
 }
 
 static void anim_stop(void) {
@@ -103,7 +105,8 @@ static void rebuild_current(void) {
   int h, m;
   now_hm(&h, &m);
   anim_stop();
-  build_set(s_new, h, m);
+  SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
+  if (build_set(target, h, m)) s_new = target;
 }
 
 static void anim_start(void) {
@@ -112,7 +115,7 @@ static void anim_start(void) {
   SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
   int h, m;
   now_hm(&h, &m);
-  build_set(target, h, m);
+  if (!build_set(target, h, m)) return;
   s_old = s_new;
   s_new = target;
   s_anim = true;
@@ -167,7 +170,7 @@ static void inbox_received(DictionaryIterator *it, void *ctx) {
     comps_set_temp((int)t->value->int32, true);
     persist_write_int(PERSIST_KEY_TEMP_F, (int)t->value->int32);
   } else if (settings_apply_message(it)) {
-    s_track_style = (TrackStyle)settings_get()->track_style;
+    s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
     anim_stop();
     rebuild_current();
     update_health();
@@ -209,8 +212,9 @@ static void build_skiers(void) {
 #ifdef MOCK_ANIM_MS
   int h, m;
   now_hm(&h, &m);
-  build_set(&s_set_b, m == 0 ? (h + 23) % 24 : h, m == 0 ? 59 : m - 1);
-  s_old = &s_set_b;
+  SkierSet *prev = s_new == &s_set_a ? &s_set_b : &s_set_a;
+  build_set(prev, m == 0 ? (h + 23) % 24 : h, m == 0 ? 59 : m - 1);
+  s_old = prev;
   s_anim = true;
 #endif
 }
@@ -242,7 +246,7 @@ static void window_unload(Window *w) {
 
 static void init(void) {
   settings_load();
-  s_track_style = (TrackStyle)settings_get()->track_style;
+  s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
   if (persist_exists(PERSIST_KEY_TEMP_F)) comps_set_temp(persist_read_int(PERSIST_KEY_TEMP_F), true);
   update_health();
   app_message_register_inbox_received(inbox_received);
