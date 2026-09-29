@@ -24,7 +24,7 @@ static void format_complication(char *buf, size_t n, uint8_t type, const struct 
       break;
     case COMP_WEATHER:
       if (s_temp_valid) snprintf(buf, n, "%d\xC2\xB0", s_temp_f);
-      else buf[0] = '\0';
+      else snprintf(buf, n, "--");
       break;
     case COMP_DATE:
       snprintf(buf, n, "%s %d", MO[now->tm_mon % 12], (int)now->tm_mday);
