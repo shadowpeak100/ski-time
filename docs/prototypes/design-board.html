@@ -324,7 +324,7 @@ function makeLayout(pid,side,track){
   const ridgeY=x=>yL+(yR-yL)*(x/W)-Math.sin(Math.PI*clamp(x/W,0,1))*bulge;
   const bermY=x=>compTop-1+Math.sin(x*.07)*1.2*k;
   const gw=Math.round(W*.21),gh=Math.round(gw*1.2),gx=Math.round(W*.035),gy=Math.round(H*.028);
-  const row2=Math.round(compTop-6*k-gh),row1=row2-gy-gh,stag=Math.round(W*.07),rowW=gw*2+gx;
+  const row1=Math.round(H/2-(2*gh+gy)/2),row2=row1+gh+gy,stag=Math.round(W*.07),rowW=gw*2+gx;
   const cw=Math.round(W*.24),chh=Math.round(cw*.95);
   let chalet,mx;
   if(side==='right'){chalet={x:W-cw-Math.round(3*k),y:compTop-chh-1,w:cw,h:chh};mx=chalet.x-Math.round(8*k)-rowW}
@@ -493,8 +493,8 @@ function skierState(sk,tau){
   return{x:sk.end.x+sk.dEnd.x*sk.stopLen*e,y:sk.end.y+sk.dEnd.y*sk.stopLen*e,h:lerp(sk.endH,sk.restH,smooth(u)),idx:p.length-1,spray:u<1?u:0}}
 function exitPath(L,sk){
   if(sk.exit)return sk.exit;const k=L.k,P=sk.restPos;
-  let X={x:-14,y:P.y+(P.x+14)*.75};if(X.y>L.H+14)X={x:P.x-(L.H+14-P.y)/.75,y:L.H+14};
-  const c1={x:P.x+F.x*14*k,y:P.y+F.y*14*k},c2={x:X.x-F.x*22*k,y:X.y-F.y*22*k};
+  const cy=L.compTop-8,X={x:-14,y:Math.min(P.y+(P.x+14)*.35,cy)};
+  const c1={x:P.x+F.x*14*k,y:Math.min(P.y+F.y*14*k,cy)},c2={x:X.x-F.x*22*k,y:Math.min(X.y-F.y*22*k,cy)};
   const pts=resample(dense([P.x,P.y,c1.x,c1.y,c2.x,c2.y,X.x,X.y],(x,y)=>({x,y}),60),.5);
   let prev=sk.restH;for(let i=0;i<pts.length;i++){const tg=tangentAt(pts,i,5);let h=Math.atan2(tg.y,tg.x);
     while(h-prev>Math.PI)h-=2*Math.PI;while(h-prev<-Math.PI)h+=2*Math.PI;pts[i].h=h;prev=h}
