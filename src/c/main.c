@@ -6,6 +6,11 @@
 #include "avalanche.h"
 #include "sprites.h"
 #include "aval_draw.h"
+#include "settings.h"
+#include "comps.h"
+#include "saver.h"
+
+#define PERSIST_KEY_TEMP_F 0
 
 typedef struct { const SkierSet *old; const SkierSet *neu; uint16_t t; } Frame;   // old == NULL -> resting
 
@@ -15,7 +20,8 @@ static Layout s_L;
 static bool s_scene_ok;
 static TrackStyle s_track_style = TRACK_TWIN;
 static uint32_t s_smoke_ms;
-static bool s_use24 = true, s_lead0 = true;
+static bool s_saver;
+static int s_last_min = -1;
 static SkierSet s_set_a, s_set_b;
 static SkPt *s_pool_a, *s_pool_b;
 static SkierSet *s_old, *s_new;
@@ -23,8 +29,6 @@ static bool s_anim;
 static uint32_t s_anim_start_ms;
 static AppTimer *s_anim_timer;
 #define ANIM_FRAME_MS 40
-
-static void comps_draw(GContext *ctx, const Layout *L) { (void)ctx; (void)L; }
 
 static void render_frame(GContext *ctx, const Frame *f) {
   const Layout *L = &s_L;
@@ -40,7 +44,7 @@ static void render_frame(GContext *ctx, const Frame *f) {
   }
   scene_draw_chalet(ctx, L);
   scene_draw_smoke(ctx, L, s_smoke_ms);
-  comps_draw(ctx, L);                       // stub: empty function until Task 9
+  comps_draw(ctx, L);
   if (f->old && f->t < 1500)
     for (uint8_t i = 0; i < f->old->count; i++) {
       SkierState st = skier_exit_state(&f->old->sk[i], i, f->t, L->k);
@@ -74,7 +78,7 @@ static uint32_t now_ms(void) {
 
 static void build_set(SkierSet *set, int h24, int m) {
   DigitSlot slots[4];
-  uint8_t n = time_slots(h24, m, s_use24, s_lead0, slots);   // Task 9 swaps in settings here
+  uint8_t n = time_slots(h24, m, settings_get()->time_24h, settings_get()->lead_zero, slots);
   skiers_build(set, &s_L, slots, n);
 }
 
@@ -90,12 +94,12 @@ static void anim_timer_cb(void *data) {
   s_anim_timer = NULL;
   uint32_t t = now_ms() - s_anim_start_ms;
   if (t >= skiers_duration(s_new)) { anim_stop(); return; }
-  s_smoke_ms = t;
   layer_mark_dirty(s_layer);
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
 }
 
 static void rebuild_current(void) {
+  if (!s_pool_a) return;
   int h, m;
   now_hm(&h, &m);
   anim_stop();
@@ -103,7 +107,7 @@ static void rebuild_current(void) {
 }
 
 static void anim_start(void) {
-  if (!s_pool_a) return;
+  if (!s_scene_ok || !s_pool_a) return;
   if (s_anim) anim_stop();
   SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
   int h, m;
@@ -119,11 +123,57 @@ static void anim_start(void) {
 #endif
 }
 
+static void tick_handler(struct tm *tm, TimeUnits changed);
+
+static void apply_saver(bool on) {
+  s_saver = on;
+  comps_set_saver(on);
+  if (on) anim_stop();
+  tick_timer_service_subscribe(!on && comps_needs_seconds() ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
+  if (s_layer) layer_mark_dirty(s_layer);
+}
+
+static bool saver_now(void) {
+  int h, m;
+  now_hm(&h, &m);
+  const Settings *st = settings_get();
+  return saver_active(st->saver_enabled, st->saver_start, st->saver_end, h, m);
+}
+
 static void tick_handler(struct tm *tm, TimeUnits changed) {
-  (void)tm; (void)changed;
+  (void)changed;
+  bool saver = saver_now();
+  if (saver != s_saver) apply_saver(saver);
+  if (s_layer) layer_mark_dirty(s_layer);
+  if (tm->tm_min == s_last_min) return;
+  s_last_min = tm->tm_min;
 #ifndef MOCK_ANIM_MS
-  anim_start();
+  if (s_saver) rebuild_current();
+  else anim_start();
 #endif
+}
+
+// Request heart-rate sampling only while a slot actually shows heart rate.
+static void update_health(void) {
+  const Settings *st = settings_get();
+  bool hr = st->comp[0] == COMP_HEART || st->comp[1] == COMP_HEART || st->comp[2] == COMP_HEART;
+  health_service_set_heart_rate_sample_period(hr ? 10 : 0);
+}
+
+static void inbox_received(DictionaryIterator *it, void *ctx) {
+  (void)ctx;
+  Tuple *t = dict_find(it, MESSAGE_KEY_TEMP_F);
+  if (t) {
+    comps_set_temp((int)t->value->int32, true);
+    persist_write_int(PERSIST_KEY_TEMP_F, (int)t->value->int32);
+  } else if (settings_apply_message(it)) {
+    s_track_style = (TrackStyle)settings_get()->track_style;
+    anim_stop();
+    rebuild_current();
+    update_health();
+    apply_saver(saver_now());
+  }
+  if (s_layer) layer_mark_dirty(s_layer);
 }
 
 static void update(Layer *layer, GContext *ctx) {
@@ -136,6 +186,7 @@ static void update(Layer *layer, GContext *ctx) {
   Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
   uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;
+  s_smoke_ms = el;
   Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
 #endif
   render_frame(ctx, &f);
@@ -174,7 +225,8 @@ static void window_load(Window *w) {
   s_layer = layer_create(bounds);
   layer_set_update_proc(s_layer, update);
   layer_add_child(root, s_layer);
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
+  { int h, m; now_hm(&h, &m); s_last_min = m; }
+  apply_saver(saver_now());
 }
 
 static void window_unload(Window *w) {
@@ -188,10 +240,22 @@ static void window_unload(Window *w) {
   scene_deinit();
 }
 
+static void init(void) {
+  settings_load();
+  s_track_style = (TrackStyle)settings_get()->track_style;
+  if (persist_exists(PERSIST_KEY_TEMP_F)) comps_set_temp(persist_read_int(PERSIST_KEY_TEMP_F), true);
+  update_health();
+  app_message_register_inbox_received(inbox_received);
+  app_message_open(128, 16);
+}
+
 int main(void) {
+  init();
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers){ .load = window_load, .unload = window_unload });
   window_stack_push(s_window, true);
+  APP_LOG(APP_LOG_LEVEL_INFO, "heap free after init %d", (int)heap_bytes_free());
   app_event_loop();
   window_destroy(s_window);
+  app_message_deregister_callbacks();
 }

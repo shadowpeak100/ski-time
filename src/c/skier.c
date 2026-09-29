@@ -1,5 +1,6 @@
 #include "skier.h"
 #include "trig.h"
+#include <stdlib.h>
 
 static Vec2 s_rest;   // hockey-stop ski direction, norm(0.92, 0.39)
 
@@ -48,8 +49,7 @@ static void build_exit(Skier *sk, const Layout *L) {
   }
 }
 
-static bool build_one(SkierSet *set, const Layout *L, Skier *sk, GlyphStroke g, uint8_t slot, uint16_t t0, uint8_t color) {
-  static Vec2 st[SKI_SCRATCH];
+static bool build_one(SkierSet *set, const Layout *L, Vec2 *st, Skier *sk, GlyphStroke g, uint8_t slot, uint16_t t0, uint8_t color) {
   const float k = L->k;
   BoxCtx bc = { L, slot };
   int ns = geom_sample_chain(g.pts, g.n, box_map, &bc, 1.0f, st, SKI_SCRATCH);
@@ -106,14 +106,17 @@ void skiers_init(SkierSet *set, SkPt *pool, uint16_t cap) {
 
 void skiers_build(SkierSet *set, const Layout *L, const DigitSlot *slots, uint8_t nslots) {
   set->count = 0; set->pool_used = 0; set->truncated = false;
+  Vec2 *st = malloc(SKI_SCRATCH * sizeof(Vec2));   // held only while building, to keep it off the resting heap
+  if (!st) { set->truncated = true; return; }
   for (uint8_t i = 0; i < nslots; i++) {
     uint8_t d = slots[i].digit, slot = slots[i].slot;
     for (uint8_t j = 0; j < glyph_stroke_count(d) && set->count < SKI_MAX; j++) {
       uint16_t t0 = SKI_DRAW_START_MS + slot * SKI_STAGGER_MS + j * SKI_PAIR_MS;
-      if (build_one(set, L, &set->sk[set->count], glyph_stroke(d, j), slot, t0, (uint8_t)((slot * 2 + j) % 8)))
+      if (build_one(set, L, st, &set->sk[set->count], glyph_stroke(d, j), slot, t0, (uint8_t)((slot * 2 + j) % 8)))
         set->count++;
     }
   }
+  free(st);
 }
 
 int32_t skier_pt_heading(const Skier *s, uint16_t i) {
