@@ -1,0 +1,8 @@
+build/
+node_modules/
+.lock-waf_*
+.DS_Store
+.superpowers/
+tests/host_tests
+tests/host_tests.dSYM/
+*.pbw
