@@ -8,7 +8,8 @@ bool scene_init(const Layout *L);                 // allocates the background bu
 void scene_deinit(void);
 void scene_invalidate(void);                      // rebuild the background on next draw
 void scene_blit(GContext *ctx, const Layout *L);  // builds the background if needed, then copies it to the framebuffer
-const uint8_t *scene_bg(void);                    // W*H bytes, GColor8 argb
+bool scene_ready(void);                           // background built and available
+bool scene_bg_row(int y, uint8_t *out, int W);    // unpacks background row y (W GColor8 bytes); false if not built
 const int16_t *scene_ridge_rows(void);            // first slope row per column (ceil(ridge+0.5))
 const int16_t *scene_berm_rows(void);             // first strip row per column (floor(berm))
 void scene_draw_chalet(GContext *ctx, const Layout *L);

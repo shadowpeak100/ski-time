@@ -33,6 +33,6 @@ SkierState skier_state(const Skier *s, uint16_t t_ms);
 SkierState skier_exit_state(const Skier *s, uint8_t order, uint16_t t_ms, float k);
 uint16_t skiers_duration(const SkierSet *set);
 int32_t skier_pt_heading(const Skier *s, uint16_t i);
-#define SKI_POOL_CAP(W) ((uint16_t)((W) * 10))
+#define SKI_POOL_CAP(W) ((uint16_t)((W) * 9))    // worst case over every time and setting: 1255 pts at W=144, 1700 at W=200
 #define SKI_REST_MS 0xFFFF   // "long after the change": everyone resting
 #endif

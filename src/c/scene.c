@@ -7,7 +7,10 @@
 #define SLOPE_PTS 110
 #define MAX_TREES 40
 
-static uint8_t *s_bg;
+// Background packed at 4 bits per pixel (low nibble = even x) with a palette of up to 16 GColor8
+// bytes: the scene uses about 13 colours, and on basalt the 8-bit copy would not leave room for the skiers.
+static uint8_t *s_bg, s_pal[16], s_npal;
+static int16_t s_stride;
 static int16_t *s_ridge_rows, *s_berm_rows;
 static bool s_bg_valid;
 static float s_chim_x, s_chim_y;   // smoke origin, kept in float so the puffs drift sub-pixel as in the prototype
@@ -137,9 +140,32 @@ static void shade_pass(GContext *ctx, const Layout *L) {
   graphics_release_frame_buffer(ctx, fb);
 }
 
+static uint8_t pal_index(uint8_t c) {
+  for (uint8_t i = 0; i < s_npal; i++) if (s_pal[i] == c) return i;
+  if (s_npal < 16) { s_pal[s_npal] = c; return s_npal++; }
+  APP_LOG(APP_LOG_LEVEL_WARNING, "scene palette full, colour %02x dropped", c);
+  return 0;
+}
+
+static void pack_row(const uint8_t *src, uint8_t *dst, int W) {
+  for (int x = 0; x < W; x += 2) {
+    uint8_t lo = pal_index(src[x]), hi = x + 1 < W ? pal_index(src[x + 1]) : 0;
+    dst[x >> 1] = (uint8_t)(lo | hi << 4);
+  }
+}
+
+static void unpack_row(const uint8_t *src, uint8_t *dst, int W) {
+  for (int x = 0; x < W; x += 2) {
+    uint8_t b = src[x >> 1];
+    dst[x] = s_pal[b & 15];
+    if (x + 1 < W) dst[x + 1] = s_pal[b >> 4];
+  }
+}
+
 static void build_bg(GContext *ctx, const Layout *L) {
   int W = L->W, H = L->H;
   float k = L->k;
+  s_npal = 0;
   graphics_context_set_antialiased(ctx, false);   // crisp pixel art: palette colours only, no blended edges
   sky_pass(ctx, L);
 
@@ -190,13 +216,16 @@ static void build_bg(GContext *ctx, const Layout *L) {
   for (int i = 0; i < nt; i++) pine(ctx, trees[i][0], trees[i][1], trees[i][2]);
 
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
-  for (int y = 0; y < H; y++) memcpy(s_bg + y * W, fb_row(fb, y), W);
+  if (!fb) return;
+  for (int y = 0; y < H; y++) pack_row(fb_row(fb, y), s_bg + y * s_stride, W);
   graphics_release_frame_buffer(ctx, fb);
 }
 
 bool scene_init(const Layout *L) {
   int W = L->W, H = L->H;
-  s_bg = malloc(W * H);
+  s_stride = (int16_t)((W + 1) / 2);
+  s_npal = 0;
+  s_bg = malloc(s_stride * H);
   s_ridge_rows = malloc(W * sizeof(int16_t));
   s_berm_rows = malloc(W * sizeof(int16_t));
   if (!s_bg || !s_ridge_rows || !s_berm_rows) { scene_deinit(); return false; }
@@ -221,11 +250,18 @@ void scene_blit(GContext *ctx, const Layout *L) {
   if (!s_bg) return;
   if (!s_bg_valid) { build_bg(ctx, L); s_bg_valid = true; return; }
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
-  for (int y = 0; y < L->H; y++) memcpy(fb_row(fb, y), s_bg + y * L->W, L->W);
+  if (!fb) return;
+  for (int y = 0; y < L->H; y++) unpack_row(s_bg + y * s_stride, fb_row(fb, y), L->W);
   graphics_release_frame_buffer(ctx, fb);
 }
 
-const uint8_t *scene_bg(void) { return s_bg; }
+bool scene_ready(void) { return s_bg && s_bg_valid; }
+
+bool scene_bg_row(int y, uint8_t *out, int W) {
+  if (!s_bg || !s_bg_valid) return false;
+  unpack_row(s_bg + y * s_stride, out, W);
+  return true;
+}
 const int16_t *scene_ridge_rows(void) { return s_ridge_rows; }
 const int16_t *scene_berm_rows(void) { return s_berm_rows; }
 
@@ -326,11 +362,14 @@ void scene_draw_smoke(GContext *ctx, const Layout *L, uint32_t ms) {
 }
 
 void scene_restore_outside_slope(GContext *ctx, const Layout *L) {
+  if (!s_bg || !s_bg_valid) return;
   int W = L->W, H = L->H;
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  if (!fb) return;
+  uint8_t src[W];
   for (int y = 0; y < H; y++) {
     uint8_t *row = fb_row(fb, y);
-    const uint8_t *src = s_bg + y * W;
+    unpack_row(s_bg + y * s_stride, src, W);
     for (int x = 0; x < W; x++)
       if (y < s_ridge_rows[x] || y >= s_berm_rows[x]) row[x] = src[x];
   }

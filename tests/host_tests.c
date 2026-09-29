@@ -182,9 +182,9 @@ static void test_skiers_all_minutes(void) {
   const int sizes[2][2] = { { 200, 228 }, { 144, 168 } };
   for (int p = 0; p < 2; p++) {
     Layout L; layout_init(&L, sizes[p][0], sizes[p][1]);
-    for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {
-      SkierSet set; build_time(&set, &L, h, m, true, true);
-      CHECK(set.count >= 4 && set.count <= SKI_MAX);
+    for (int f = 0; f < 4; f++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {   // every 12/24 h, lead-zero combo
+      SkierSet set; build_time(&set, &L, h, m, f & 1, f & 2);
+      CHECK(set.count >= ((f & 2) ? 4 : 3) && set.count <= SKI_MAX);   // no lead zero: 3 digits before 10:00
       check_set(&set, &L);
     }
   }
