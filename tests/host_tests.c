@@ -210,6 +210,55 @@ static void test_skier_mid_stroke(void) {
   CHECK(r.visible && r.idx > s->s_idx && r.idx < s->n - 1);
 }
 
+#include "avalanche.h"
+#include "saver.h"
+
+static void test_aval_timing(void) {
+  Layout L; layout_init(&L, 200, 228);
+  AvalFrame A;
+  aval_frame(&A, &L, AV_FLOW_START_MS - 1); CHECK(!A.active);
+  aval_frame(&A, &L, AV_FLOW_END_MS + AV_FADE_MS + 1); CHECK(!A.active);
+  aval_frame(&A, &L, 1000); CHECK(A.active);
+  CHECK(A.a > 0 && A.a < 1);
+}
+
+static void test_aval_front_advances(void) {
+  Layout L; layout_init(&L, 200, 228);
+  AvalFrame A; int16_t prev[AV_MAX_S];
+  aval_frame(&A, &L, AV_FLOW_START_MS);
+  memcpy(prev, A.front5, sizeof prev);
+  for (uint16_t t = AV_FLOW_START_MS + 100; t <= AV_FLOW_END_MS; t += 100) {
+    aval_frame(&A, &L, t);
+    for (int s = 0; s < 297; s += 7) CHECK(A.front5[s] >= prev[s]);
+    memcpy(prev, A.front5, sizeof prev);
+  }
+}
+
+static void test_aval_pixels(void) {
+  Layout L; layout_init(&L, 200, 228);
+  uint8_t st[AV_MAX_S]; aval_streaks(st);
+  AvalFrame A;
+  aval_frame(&A, &L, 900);                                 // front still near the top right
+  CHECK_EQ_INT(aval_pixel(&A, st, L.k, 5, 190, 900), AV_NONE);   // bottom left untouched
+  aval_frame(&A, &L, AV_FLOW_END_MS);                      // front at the bottom left
+  AvPix p = aval_pixel(&A, st, L.k, 170, 60, AV_FLOW_END_MS);    // top right, long passed
+  CHECK(p == AV_RESTORE || p == AV_CELESTE);
+  aval_frame(&A, &L, AV_FLOW_START_MS);                    // grow == 0: no cast shadow yet
+  for (int x = 0; x < 200; x += 3) for (int y = 10; y < 190; y += 3)
+    CHECK(aval_pixel(&A, st, L.k, x, y, AV_FLOW_START_MS) != AV_SHADOW);
+}
+
+static void test_saver_window(void) {
+  CHECK(!saver_active(false, 1320, 420, 23, 0));
+  CHECK(saver_active(true, 1320, 420, 23, 0));             // wraps midnight
+  CHECK(saver_active(true, 1320, 420, 6, 59));
+  CHECK(!saver_active(true, 1320, 420, 7, 0));
+  CHECK(!saver_active(true, 1320, 420, 12, 0));
+  CHECK(saver_active(true, 60, 120, 1, 30));               // same-day window
+  CHECK(!saver_active(true, 60, 120, 2, 0));
+  CHECK(!saver_active(true, 300, 300, 5, 0));              // empty window
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -224,6 +273,10 @@ int main(void) {
   test_skiers_all_minutes();
   test_skiers_digit_count_change();
   test_skier_mid_stroke();
+  test_aval_timing();
+  test_aval_front_advances();
+  test_aval_pixels();
+  test_saver_window();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
