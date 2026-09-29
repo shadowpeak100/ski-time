@@ -49,10 +49,11 @@ static void build_exit(Skier *sk, const Layout *L) {
   }
 }
 
-static bool build_one(SkierSet *set, const Layout *L, Vec2 *st, Skier *sk, GlyphStroke g, uint8_t slot, uint16_t t0, uint8_t color) {
+static bool build_one(SkierSet *set, const Layout *L, Vec2 *st, int cap_pts, Skier *sk, GlyphStroke g, uint8_t slot, uint16_t t0, uint8_t color) {
   const float k = L->k;
   BoxCtx bc = { L, slot };
-  int ns = geom_sample_chain(g.pts, g.n, box_map, &bc, 1.0f, st, SKI_SCRATCH);
+  int ns = geom_sample_chain(g.pts, g.n, box_map, &bc, 1.0f, st, cap_pts);
+  if (ns >= cap_pts) set->truncated = true;
   if (ns < 2) return false;
   Vec2 start = st[0], d0 = geom_tangent(st, ns, 0, 3);
   Vec2 P0 = { L->W + 10.0f, clampf(start.y - (L->W + 10 - start.x) * 0.45f, layout_ridge_y(L, L->W) + 8 * k, L->comp_top - 10.0f) };
@@ -60,7 +61,8 @@ static bool build_one(SkierSet *set, const Layout *L, Vec2 *st, Skier *sk, Glyph
   Vec2 a = geom_norm(-1, 0.45f);
   const float entry[8] = { P0.x, P0.y, P0.x + a.x * len * 0.35f, P0.y + a.y * len * 0.35f,
                            start.x - d0.x * len * 0.4f, start.y - d0.y * len * 0.4f, start.x, start.y };
-  int ne = geom_sample_chain(entry, 8, id_map, NULL, 1.0f, st + ns, SKI_SCRATCH - ns);
+  int ne = geom_sample_chain(entry, 8, id_map, NULL, 1.0f, st + ns, cap_pts - ns);
+  if (ns + ne >= cap_pts) set->truncated = true;
 
   SkPt *p = set->pool + set->pool_used;
   int cap = set->pool_cap - set->pool_used, n = 0;
@@ -106,13 +108,14 @@ void skiers_init(SkierSet *set, SkPt *pool, uint16_t cap) {
 
 void skiers_build(SkierSet *set, const Layout *L, const DigitSlot *slots, uint8_t nslots) {
   set->count = 0; set->pool_used = 0; set->truncated = false;
-  Vec2 *st = malloc(SKI_SCRATCH * sizeof(Vec2));   // held only while building, to keep it off the resting heap
+  const int cap_pts = SKI_SCRATCH_FOR(L->W);
+  Vec2 *st = malloc(cap_pts * sizeof(Vec2));   // held only while building, to keep it off the resting heap
   if (!st) { set->truncated = true; return; }
   for (uint8_t i = 0; i < nslots; i++) {
     uint8_t d = slots[i].digit, slot = slots[i].slot;
     for (uint8_t j = 0; j < glyph_stroke_count(d) && set->count < SKI_MAX; j++) {
       uint16_t t0 = SKI_DRAW_START_MS + slot * SKI_STAGGER_MS + j * SKI_PAIR_MS;
-      if (build_one(set, L, st, &set->sk[set->count], glyph_stroke(d, j), slot, t0, (uint8_t)((slot * 2 + j) % 8)))
+      if (build_one(set, L, st, cap_pts, &set->sk[set->count], glyph_stroke(d, j), slot, t0, (uint8_t)((slot * 2 + j) % 8)))
         set->count++;
     }
   }

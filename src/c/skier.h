@@ -14,7 +14,7 @@
 #define SKI_EXIT_GAP_MS 30
 #define SKI_MAX 8
 #define SKI_EXIT_SEGS 16
-#define SKI_SCRATCH 420
+#define SKI_SCRATCH_FOR(W) ((W) * 2 + 40)   // sampled points; measured peak need is 238 (basalt) / 324 (emery)
 typedef struct { int16_t x, y; uint16_t t; } SkPt;     // x,y in 1/16 px; t ms since the minute change began
 typedef struct {
   SkPt *pts; uint16_t n, s_idx;                          // [0,s_idx) ski-in, [s_idx,n) digit stroke (tracks)
