@@ -152,7 +152,7 @@ uint8_t theme_bg_palette(const Theme *t, Col8 out[32]);  // distinct colours the
 #define FLOOD_COUNT 5
 typedef struct { float bx, by, hx, hy, dx, dy; } FloodHead;   // base, head, unit aim direction (px)
 void  flood_heads(int W, int H, float k, FloodHead out[FLOOD_COUNT]);
-float flood_at(const FloodHead h[FLOOD_COUNT], float k, float x, float y);   // 0..1
+float flood_at(const FloodHead *h, int n, float k, float x, float y);   // 0..1, max over the first n heads
 
 // decor.h
 typedef struct { int16_t x, base, h; } SlopeTree;
@@ -170,7 +170,7 @@ extern const SlopeTree SLOPE_TREES[SLOPE_TREE_COUNT];   // Emery pixel coordinat
   - if night: FFFFAA, FFFFFF, FFFF55 and 000055 (glow, floods, lamps, poles)
 - **`flood.c`:**
   - Store the 5 {base, aim} fraction pairs from the spec §4. Head = base − (0, 16k). The aim direction is the unit vector from the head to the aim point. Use `LEN = 215`, and precompute `COSH = 0.9135455f` (cos 24°).
-  - `flood_at` takes the maximum over the heads of `edge·fall·start`. Compute `fall^0.85` as `0.5f*(f + f75)` where `f75 = sqrt(f)*sqrt(sqrt(f))` (within 1.5% of the true power, no libm). Return 0 when `d > LEN·k` or `d < 1` or `cos ≤ COSH`.
+  - `flood_at` takes the maximum over the first `n` heads of `edge·fall·start`. Compute `fall^0.85` as `0.5f*(f + f75)` where `f75 = sqrt(f)*sqrt(sqrt(f))` (within 1.5% of the true power, no libm). Return 0 when `d > LEN·k` or `d < 1` or `cos ≤ COSH`.
 - **`decor.c`:** the 9 trees from the spec §4, in that order.
 
 - [ ] **Step 1: Tests**
@@ -197,13 +197,13 @@ static void test_flood_coverage(void) {
         float u = m*m*m*g.pts[i-2] + 3*m*m*t*g.pts[i] + 3*m*t*t*g.pts[i+2] + t*t*t*g.pts[i+4];
         float v = m*m*m*g.pts[i-1] + 3*m*m*t*g.pts[i+1] + 3*m*t*t*g.pts[i+3] + t*t*t*g.pts[i+5];
         Vec2 p = layout_glyph_point(&L, slot, u, v);
-        all++; if (flood_at(fh, L.k, p.x, p.y) > 0.35f) lit++;
+        all++; if (flood_at(fh, FLOOD_COUNT, L.k, p.x, p.y) > 0.35f) lit++;
       }
     }
   CHECK(lit * 100 >= all * 95);
-  CHECK(flood_at(fh, L.k, fh[0].hx + 20, fh[0].hy) == 0);     // behind the lamp (lamp 0 aims left)
-  CHECK(flood_at(fh, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0 ||
-        flood_at(fh, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) < 0.35f);  // other cones may overlap there
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx - fh[0].dx * 20, fh[0].hy - fh[0].dy * 20) == 0);   // behind lamp 0
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0); // past the end of its cone
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 60, fh[0].hy + fh[0].dy * 60) > 0.5f); // bright along its axis
 }
 static void test_slope_trees_clear(void) {
   Layout L; layout_init(&L, 200, 228);
@@ -283,7 +283,7 @@ static void test_slope_trees_clear(void) {
 
 - [ ] **Step 1: Background additions**, ported from the prototype and in the prototype's order:
   - **Window glow (night):** in the drift/crest pixel pass.
-  - **Floodlight cones (night):** use `flood_heads` and `flood_at` over snow pixels between the ridge and the drift, with the FFFFAA/FFFFFF thresholds from the spec §4. Do this in the same pixel pass.
+  - **Floodlight cones (night):** use `flood_heads` and `flood_at(..., FLOOD_COUNT, ...)` over snow pixels between the ridge and the drift, with the FFFFAA/FFFFFF thresholds from the spec §4. Do this in the same pixel pass.
   - **Poles and lamps (night):** after the pixel pass.
   - **Slope trees (every theme, `W >= 200` only):** after the ridge pines, back to front by base, each with its `snow_shade` shadow ellipse.
 - [ ] **Step 2: Campfire.** Port `drawCampfire` into `scene_draw_campfire(ctx, L, ms)`. Use `graphics_*` calls. The glow ellipses are dithered, so draw them with a framebuffer capture and bayer, like `fb_dither_circle`. Draw them first, then the logs, flames and sparks. Animate from the same ms as the smoke.
