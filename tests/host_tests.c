@@ -137,6 +137,79 @@ static void test_layout_glyph_point(void) {
   CHECK_NEAR(bot.x, 64 - 0.08 * 42, 1e-3); CHECK_NEAR(bot.y, 134, 1e-3);
 }
 
+#include "skier.h"
+
+static SkPt g_pool[2000];
+
+static void build_time(SkierSet *set, const Layout *L, int h, int m, bool use24, bool lead0) {
+  DigitSlot s[4]; uint8_t n = time_slots(h, m, use24, lead0, s);
+  skiers_init(set, g_pool, SKI_POOL_CAP(L->W));
+  skiers_build(set, L, s, n);
+}
+
+static void check_set(const SkierSet *set, const Layout *L) {
+  CHECK(!set->truncated);
+  CHECK(set->pool_used <= set->pool_cap);
+  uint16_t d = skiers_duration(set);
+  CHECK(d >= 3500 && d <= 6000);
+  for (uint8_t i = 0; i < set->count; i++) {
+    const Skier *s = &set->sk[i];
+    CHECK(s->n > s->s_idx && s->s_idx > 0);
+    for (uint16_t j = 1; j < s->n; j++) CHECK(s->pts[j].t >= s->pts[j - 1].t);
+    CHECK(!skier_state(s, s->t0 - 1).visible);
+    SkierState r = skier_state(s, s->t_end + SKI_STOP_MS);
+    CHECK(r.visible && r.spray == 0);
+    CHECK_NEAR(r.x / 16.0, s->rest_pos.x, 0.2);
+    CHECK_NEAR(r.y / 16.0, s->rest_pos.y, 0.2);
+    CHECK(!skier_exit_state(s, i, 1500, L->k).visible);         // everyone gone 1.5 s in
+    SkierState e0 = skier_exit_state(s, i, 0, L->k);
+    CHECK(e0.visible && e0.h == s->rest_h);
+  }
+}
+
+static void test_skiers_2046(void) {
+  Layout L; layout_init(&L, 200, 228);
+  SkierSet set; build_time(&set, &L, 20, 46, true, true);
+  CHECK_EQ_INT(set.count, 6);              // 2 (one) + 0 (two) + 4 (two) + 6 (one)
+  check_set(&set, &L);
+  // The first skier enters from off the right edge and its stroke starts on digit slot 0.
+  CHECK(set.sk[0].pts[0].x / 16 >= L.W);
+  CHECK(set.sk[0].t0 == SKI_DRAW_START_MS);
+  CHECK(set.sk[2].t0 == SKI_DRAW_START_MS + SKI_STAGGER_MS + SKI_PAIR_MS);   // 0's second skier
+}
+
+static void test_skiers_all_minutes(void) {
+  const int sizes[2][2] = { { 200, 228 }, { 144, 168 } };
+  for (int p = 0; p < 2; p++) {
+    Layout L; layout_init(&L, sizes[p][0], sizes[p][1]);
+    for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {
+      SkierSet set; build_time(&set, &L, h, m, true, true);
+      CHECK(set.count >= 4 && set.count <= SKI_MAX);
+      check_set(&set, &L);
+    }
+  }
+}
+
+static void test_skiers_digit_count_change(void) {
+  Layout L; layout_init(&L, 200, 228);
+  SkierSet a; build_time(&a, &L, 12, 59, false, false);   // "12:59"
+  uint8_t na = a.count;
+  check_set(&a, &L);                                       // before b reuses the shared pool
+  SkierSet b; build_time(&b, &L, 13, 0, false, false);    // "1:00" (one hour digit)
+  CHECK_EQ_INT(na, 4);                                     // "12:59": one skier per digit
+  CHECK_EQ_INT(b.count, 5);                                // "1:00": 1 (one) + 0 (two) + 0 (two)
+  check_set(&b, &L);
+}
+
+static void test_skier_mid_stroke(void) {
+  Layout L; layout_init(&L, 200, 228);
+  SkierSet set; build_time(&set, &L, 11, 11, true, true);
+  const Skier *s = &set.sk[0];
+  uint16_t mid = s->pts[s->s_idx + (s->n - s->s_idx) / 2].t;
+  SkierState r = skier_state(s, mid);
+  CHECK(r.visible && r.idx > s->s_idx && r.idx < s->n - 1);
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -147,6 +220,10 @@ int main(void) {
   test_layout_emery();
   test_layout_basalt();
   test_layout_glyph_point();
+  test_skiers_2046();
+  test_skiers_all_minutes();
+  test_skiers_digit_count_change();
+  test_skier_mid_stroke();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
