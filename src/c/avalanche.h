@@ -12,7 +12,7 @@
 #define AV_MAX_S 320
 
 typedef enum { AV_NONE = 0, AV_SHADOW, AV_RESTORE, AV_WHITE, AV_CELESTE, AV_BLUE } AvPix;
-typedef struct { bool active; float a, fade, grow, uf; int16_t body5; int16_t front5[AV_MAX_S]; } AvalFrame;
+typedef struct { bool active; float a, fade, grow, uf; int16_t body5; int32_t sh0, sh1, wake5, grow256, fade256; int16_t front5[AV_MAX_S]; } AvalFrame;
 
 float   aval_noise(float x);
 uint8_t aval_bayer(int x, int y);                         // 0..15

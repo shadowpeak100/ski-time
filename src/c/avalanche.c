@@ -1,4 +1,5 @@
 #include "avalanche.h"
+#include "geom.h"
 #include "trig.h"
 
 // Integer maths throughout the per-pixel path: u5 = 5u = 4y - 3x, s = (4x + 3y) / 5.
@@ -21,7 +22,11 @@ void aval_streaks(uint8_t st[AV_MAX_S]) {
 
 void aval_frame(AvalFrame *A, const Layout *L, uint16_t t) {
   A->active = t >= AV_FLOW_START_MS && t <= AV_FLOW_END_MS + AV_FADE_MS;
-  if (!A->active) return;
+  if (!A->active) {  // aval_pixel must only be called on an active frame
+    A->a = A->fade = A->grow = A->uf = 0;
+    A->body5 = 0; A->sh0 = A->sh1 = A->wake5 = A->grow256 = A->fade256 = 0;
+    return;
+  }
   float k = L->k, a = (t - AV_FLOW_START_MS) / (float)(AV_FLOW_END_MS - AV_FLOW_START_MS);
   if (a > 1) a = 1;
   float p = a * geom_sqrt(geom_sqrt(a));                               // a^1.25
@@ -35,6 +40,11 @@ void aval_frame(AvalFrame *A, const Layout *L, uint16_t t) {
     A->front5[s] = (int16_t)(f * 5);
   }
   A->body5 = (int16_t)((26 * k * A->grow + 1) * 5);
+  A->sh0 = (int32_t)(-45 * k);
+  A->sh1 = (int32_t)(-10 * k);
+  A->wake5 = (int32_t)(200 * k);
+  A->grow256 = (int32_t)(A->grow * 256);
+  A->fade256 = (int32_t)(A->fade * 256);
 }
 
 float aval_front(const AvalFrame *A, float s) {
@@ -53,15 +63,16 @@ static int32_t churn(int32_t s, int32_t u5, int32_t t) {
 }
 
 AvPix aval_pixel(const AvalFrame *A, const uint8_t *streak, float k, int x, int y, uint16_t t) {
+  (void)k;
   int32_t u5 = 4 * y - 3 * x, s = (4 * x + 3 * y) / 5;
   if (s < 0) s = 0;
   if (s >= AV_MAX_S) s = AV_MAX_S - 1;
   int32_t dep = A->front5[s] - u5;
-  int32_t sh0 = (int32_t)(-45 * k), sh1 = (int32_t)(-10 * k);
+  int32_t sh0 = A->sh0, sh1 = A->sh1;
   if (dep < sh0) return AV_NONE;
   if (dep < 0) {
     if (dep < sh1) {
-      int32_t p = 128 * (dep - sh0) / (sh1 - sh0) * (int32_t)(A->grow * 256) / 256;
+      int32_t p = 128 * (dep - sh0) / (sh1 - sh0) * A->grow256 / 256;
       if (dith(x, y, p)) return AV_SHADOW;
     }
     return AV_NONE;
@@ -73,9 +84,9 @@ AvPix aval_pixel(const AvalFrame *A, const uint8_t *streak, float k, int x, int 
     int32_t p = (c - 102) * 461 / 256 * (256 - t256) / 256;
     return dith(x, y, p) ? AV_CELESTE : AV_WHITE;
   }
-  int32_t wake = (int32_t)(200 * k);
+  int32_t wake = A->wake5;
   if (dep < body + wake) {
-    int32_t w256 = (256 - (dep - body) * 256 / wake) * (int32_t)(A->fade * 256) / 256;
+    int32_t w256 = (256 - (dep - body) * 256 / wake) * A->fade256 / 256;
     int32_t p = streak[s] * w256 / 256 * 205 / 256;
     if (dith(x, y, p)) return AV_CELESTE;
   }
