@@ -33,12 +33,13 @@ static Vec2 cub_d(const Vec2 *c, float t) {
 
 static void build_exit(Skier *sk, const Layout *L) {
   float k = L->k;
-  Vec2 P = sk->rest_pos, X = { -14, P.y + (P.x + 14) * 0.75f };
-  if (X.y > L->H + 14) X = (Vec2){ P.x - (L->H + 14 - P.y) / 0.75f, L->H + 14.0f };
+  Vec2 P = sk->rest_pos, X = { -14, P.y + (P.x + 14) * 0.35f };
   sk->ex[0] = P;
   sk->ex[1] = (Vec2){ P.x + FALL.x * 14 * k, P.y + FALL.y * 14 * k };
   sk->ex[2] = (Vec2){ X.x - FALL.x * 22 * k, X.y - FALL.y * 22 * k };
   sk->ex[3] = X;
+  // A Bezier stays inside its control hull, so the path stays above the strip.
+  for (int i = 1; i < 4; i++) if (sk->ex[i].y > L->exit_ceiling) sk->ex[i].y = L->exit_ceiling;
   sk->ex_len[0] = 0;
   Vec2 prev = P;
   for (int i = 1; i <= SKI_EXIT_SEGS; i++) {

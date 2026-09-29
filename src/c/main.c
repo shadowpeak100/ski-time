@@ -191,6 +191,7 @@ static void update(Layer *layer, GContext *ctx) {
     return;
   }
 #ifdef MOCK_ANIM_MS
+  uint32_t el = MOCK_ANIM_MS;
   Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
   uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;

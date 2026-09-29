@@ -9,6 +9,7 @@ typedef struct { int16_t x, y, w, h; } Rect16;
 typedef struct {
   int16_t W, H; float k;
   int16_t comp_h, comp_top;
+  float exit_ceiling;   // lowest y a ski-out path may reach
   float y_l, y_r, bulge;
   int16_t gw, gh;
   Pt16 boxes[4];

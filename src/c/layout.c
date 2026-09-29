@@ -29,7 +29,8 @@ void layout_init(Layout *L, int W, int H) {
   L->y_l = rnd(H * 0.37f); L->y_r = rnd(H * 0.035f); L->bulge = H * 0.035f;
   L->gw = rnd(W * 0.21f); L->gh = rnd(L->gw * 1.2f);
   int16_t gx = rnd(W * 0.035f), gy = rnd(H * 0.028f);
-  int16_t row2 = rnd(L->comp_top - 6 * k - L->gh), row1 = row2 - gy - L->gh;
+  int16_t row1 = rnd(H / 2.0f - (2 * L->gh + gy) / 2.0f), row2 = row1 + L->gh + gy;   // block centred on the screen
+  L->exit_ceiling = L->comp_top - 8.0f;
   int16_t stag = rnd(W * 0.07f), row_w = L->gw * 2 + gx;
   int16_t cw = rnd(W * 0.24f), chh = rnd(cw * 0.95f);
   L->chalet = (Rect16){ (int16_t)(W - cw - rnd(3 * k)), (int16_t)(L->comp_top - chh - 1), cw, chh };

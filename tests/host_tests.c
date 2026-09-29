@@ -99,10 +99,10 @@ static void test_layout_emery(void) {
   Layout L; layout_init(&L, 200, 228);
   CHECK_NEAR(L.k, 1.0, 1e-6);
   CHECK_EQ_INT(L.comp_top, 196); CHECK_EQ_INT(L.gw, 42); CHECK_EQ_INT(L.gh, 50);
-  CHECK_EQ_INT(L.boxes[0].x, 64);  CHECK_EQ_INT(L.boxes[0].y, 84);
-  CHECK_EQ_INT(L.boxes[1].x, 113); CHECK_EQ_INT(L.boxes[1].y, 84);
-  CHECK_EQ_INT(L.boxes[2].x, 50);  CHECK_EQ_INT(L.boxes[2].y, 140);
-  CHECK_EQ_INT(L.boxes[3].x, 99);  CHECK_EQ_INT(L.boxes[3].y, 140);
+  CHECK_EQ_INT(L.boxes[0].x, 64);  CHECK_EQ_INT(L.boxes[0].y, 61);
+  CHECK_EQ_INT(L.boxes[1].x, 113); CHECK_EQ_INT(L.boxes[1].y, 61);
+  CHECK_EQ_INT(L.boxes[2].x, 50);  CHECK_EQ_INT(L.boxes[2].y, 117);
+  CHECK_EQ_INT(L.boxes[3].x, 99);  CHECK_EQ_INT(L.boxes[3].y, 117);
   CHECK_EQ_INT(L.chalet.x, 149); CHECK_EQ_INT(L.chalet.y, 149);
   CHECK_EQ_INT(L.chalet.w, 48);  CHECK_EQ_INT(L.chalet.h, 46);
   CHECK_NEAR(layout_ridge_y(&L, 0), 84.0, 0.05);
@@ -118,9 +118,9 @@ static void test_layout_basalt(void) {
   Layout L; layout_init(&L, 144, 168);
   CHECK_NEAR(L.k, 0.72, 1e-6);
   CHECK_EQ_INT(L.comp_top, 144); CHECK_EQ_INT(L.gw, 30); CHECK_EQ_INT(L.gh, 36);
-  CHECK_EQ_INT(L.boxes[0].x, 46); CHECK_EQ_INT(L.boxes[0].y, 63);
-  CHECK_EQ_INT(L.boxes[1].x, 81); CHECK_EQ_INT(L.boxes[2].x, 36);
-  CHECK_EQ_INT(L.boxes[2].y, 104); CHECK_EQ_INT(L.boxes[3].x, 71);
+  CHECK_EQ_INT(L.boxes[0].x, 46); CHECK_EQ_INT(L.boxes[0].y, 46);
+  CHECK_EQ_INT(L.boxes[1].x, 81); CHECK_EQ_INT(L.boxes[1].y, 46); CHECK_EQ_INT(L.boxes[2].x, 36);
+  CHECK_EQ_INT(L.boxes[2].y, 87); CHECK_EQ_INT(L.boxes[3].y, 87); CHECK_EQ_INT(L.boxes[3].x, 71);
   CHECK_EQ_INT(L.chalet.x, 107); CHECK_EQ_INT(L.chalet.y, 110);
   CHECK_EQ_INT(L.chalet.w, 35);  CHECK_EQ_INT(L.chalet.h, 33);
   CHECK_NEAR(layout_ridge_y(&L, 0), 62.0, 0.05);
@@ -133,8 +133,8 @@ static void test_layout_basalt(void) {
 static void test_layout_glyph_point(void) {
   Layout L; layout_init(&L, 200, 228);
   Vec2 top = layout_glyph_point(&L, 0, 0, 0), bot = layout_glyph_point(&L, 0, 0, 1);
-  CHECK_NEAR(top.x, 64 + 0.08 * 42, 1e-3); CHECK_NEAR(top.y, 84, 1e-3);   // tops lean right
-  CHECK_NEAR(bot.x, 64 - 0.08 * 42, 1e-3); CHECK_NEAR(bot.y, 134, 1e-3);
+  CHECK_NEAR(top.x, 64 + 0.08 * 42, 1e-3); CHECK_NEAR(top.y, 61, 1e-3);   // tops lean right
+  CHECK_NEAR(bot.x, 64 - 0.08 * 42, 1e-3); CHECK_NEAR(bot.y, 111, 1e-3);
 }
 
 #include "skier.h"
@@ -188,6 +188,30 @@ static void test_skiers_all_minutes(void) {
       check_set(&set, &L);
     }
   }
+}
+
+static void check_exit_stays_above_strip(int W, int H) {
+  Layout L; layout_init(&L, W, H);
+  CHECK_NEAR(L.exit_ceiling, L.comp_top - 8, 1e-4);
+  for (int f = 0; f < 4; f++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {
+    SkierSet set; build_time(&set, &L, h, m, f & 1, f & 2);
+    for (uint8_t i = 0; i < set.count; i++) {
+      const Skier *s = &set.sk[i];
+      float last_x = s->rest_pos.x;
+      for (uint16_t t = 0; t <= 1500; t += 20) {
+        SkierState st = skier_exit_state(s, i, t, L.k);
+        if (!st.visible) continue;
+        CHECK(st.y / 16.0 <= L.exit_ceiling + 0.01);
+        last_x = st.x / 16.0f;
+      }
+      CHECK(last_x < s->rest_pos.x);
+    }
+  }
+}
+
+static void test_exit_stays_above_strip(void) {
+  check_exit_stays_above_strip(200, 228);   // emery
+  check_exit_stays_above_strip(144, 168);   // basalt
 }
 
 static void test_skiers_digit_count_change(void) {
@@ -271,6 +295,7 @@ int main(void) {
   test_layout_glyph_point();
   test_skiers_2046();
   test_skiers_all_minutes();
+  test_exit_stays_above_strip();
   test_skiers_digit_count_change();
   test_skier_mid_stroke();
   test_aval_timing();
