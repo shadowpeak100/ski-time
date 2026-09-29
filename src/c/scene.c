@@ -143,7 +143,8 @@ static void shade_pass(GContext *ctx, const Layout *L) {
 static uint8_t pal_index(uint8_t c) {
   for (uint8_t i = 0; i < s_npal; i++) if (s_pal[i] == c) return i;
   if (s_npal < 16) { s_pal[s_npal] = c; return s_npal++; }
-  APP_LOG(APP_LOG_LEVEL_WARNING, "scene palette full, colour %02x dropped", c);
+  static bool logged;
+  if (!logged) { logged = true; APP_LOG(APP_LOG_LEVEL_WARNING, "scene palette full, colour %02x dropped", c); }
   return 0;
 }
 
@@ -162,7 +163,7 @@ static void unpack_row(const uint8_t *src, uint8_t *dst, int W) {
   }
 }
 
-static void build_bg(GContext *ctx, const Layout *L) {
+static bool build_bg(GContext *ctx, const Layout *L) {
   int W = L->W, H = L->H;
   float k = L->k;
   s_npal = 0;
@@ -216,9 +217,10 @@ static void build_bg(GContext *ctx, const Layout *L) {
   for (int i = 0; i < nt; i++) pine(ctx, trees[i][0], trees[i][1], trees[i][2]);
 
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
-  if (!fb) return;
+  if (!fb) return false;
   for (int y = 0; y < H; y++) pack_row(fb_row(fb, y), s_bg + y * s_stride, W);
   graphics_release_frame_buffer(ctx, fb);
+  return true;
 }
 
 bool scene_init(const Layout *L) {
@@ -248,7 +250,7 @@ void scene_invalidate(void) { s_bg_valid = false; }
 
 void scene_blit(GContext *ctx, const Layout *L) {
   if (!s_bg) return;
-  if (!s_bg_valid) { build_bg(ctx, L); s_bg_valid = true; return; }
+  if (!s_bg_valid) { s_bg_valid = build_bg(ctx, L); return; }
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return;
   for (int y = 0; y < L->H; y++) unpack_row(s_bg + y * s_stride, fb_row(fb, y), L->W);

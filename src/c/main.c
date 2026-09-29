@@ -16,8 +16,13 @@ static bool s_scene_ok;
 static TrackStyle s_track_style = TRACK_TWIN;
 static uint32_t s_smoke_ms;
 static bool s_use24 = true, s_lead0 = true;
-static SkierSet s_cur, s_prev;
-static SkPt *s_pool_cur, *s_pool_prev;
+static SkierSet s_set_a, s_set_b;
+static SkPt *s_pool_a, *s_pool_b;
+static SkierSet *s_old, *s_new;
+static bool s_anim;
+static uint32_t s_anim_start_ms;
+static AppTimer *s_anim_timer;
+#define ANIM_FRAME_MS 40
 
 static void comps_draw(GContext *ctx, const Layout *L) { (void)ctx; (void)L; }
 
@@ -49,48 +54,114 @@ static void render_frame(GContext *ctx, const Frame *f) {
   }
 }
 
+static void now_hm(int *h, int *m) {
+  time_t t = time(NULL);
+  struct tm *lt = localtime(&t);
+  *h = lt->tm_hour;
+  *m = lt->tm_min;
+#ifdef MOCK_H
+  *h = MOCK_H;
+  *m = MOCK_M;
+#endif
+}
+
+static uint32_t now_ms(void) {
+  time_t s;
+  uint16_t ms;
+  time_ms(&s, &ms);
+  return (uint32_t)s * 1000u + ms;
+}
+
 static void build_set(SkierSet *set, int h24, int m) {
   DigitSlot slots[4];
-  uint8_t n = time_slots(h24, m, s_use24, s_lead0, slots);
+  uint8_t n = time_slots(h24, m, s_use24, s_lead0, slots);   // Task 9 swaps in settings here
   skiers_build(set, &s_L, slots, n);
 }
 
+static void anim_stop(void) {
+  if (s_anim_timer) { app_timer_cancel(s_anim_timer); s_anim_timer = NULL; }
+  s_anim = false;
+  s_old = NULL;
+  if (s_layer) layer_mark_dirty(s_layer);
+}
+
+static void anim_timer_cb(void *data) {
+  (void)data;
+  s_anim_timer = NULL;
+  uint32_t t = now_ms() - s_anim_start_ms;
+  if (t >= skiers_duration(s_new)) { anim_stop(); return; }
+  s_smoke_ms = t;
+  layer_mark_dirty(s_layer);
+  s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
+}
+
+static void rebuild_current(void) {
+  int h, m;
+  now_hm(&h, &m);
+  anim_stop();
+  build_set(s_new, h, m);
+}
+
+static void anim_start(void) {
+  if (!s_pool_a) return;
+  if (s_anim) anim_stop();
+  SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
+  int h, m;
+  now_hm(&h, &m);
+  build_set(target, h, m);
+  s_old = s_new;
+  s_new = target;
+  s_anim = true;
+  s_anim_start_ms = now_ms();
+  s_smoke_ms = 0;
+#ifndef MOCK_ANIM_MS
+  s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
+#endif
+}
+
+static void tick_handler(struct tm *tm, TimeUnits changed) {
+  (void)tm; (void)changed;
+#ifndef MOCK_ANIM_MS
+  anim_start();
+#endif
+}
+
 static void update(Layer *layer, GContext *ctx) {
-  if (!s_scene_ok || !s_pool_cur) {
+  if (!s_scene_ok || !s_pool_a) {
     graphics_context_set_fill_color(ctx, GColorWhite);
     graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
     return;
   }
 #ifdef MOCK_ANIM_MS
-  Frame f = { &s_prev, &s_cur, MOCK_ANIM_MS };
+  Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
-  Frame f = { NULL, &s_cur, SKI_REST_MS };
+  uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;
+  Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
 #endif
   render_frame(ctx, &f);
 }
 
 static void build_skiers(void) {
   uint16_t cap = SKI_POOL_CAP(s_L.W);
-  s_pool_cur = malloc(cap * sizeof(SkPt));
-  s_pool_prev = malloc(cap * sizeof(SkPt));
+  s_pool_a = malloc(cap * sizeof(SkPt));
+  s_pool_b = malloc(cap * sizeof(SkPt));
   APP_LOG(APP_LOG_LEVEL_INFO, "heap free %d", (int)heap_bytes_free());
-  if (!s_pool_cur || !s_pool_prev) {
-    free(s_pool_cur); free(s_pool_prev);
-    s_pool_cur = s_pool_prev = NULL;
+  if (!s_pool_a || !s_pool_b) {
+    free(s_pool_a); free(s_pool_b);
+    s_pool_a = s_pool_b = NULL;
     return;
   }
-  skiers_init(&s_cur, s_pool_cur, cap);
-  skiers_init(&s_prev, s_pool_prev, cap);
-#ifdef MOCK_H
-  int h = MOCK_H, m = MOCK_M;
-#else
-  time_t now = time(NULL);
-  struct tm *tm = localtime(&now);
-  int h = tm->tm_hour, m = tm->tm_min;
+  skiers_init(&s_set_a, s_pool_a, cap);
+  skiers_init(&s_set_b, s_pool_b, cap);
+  s_new = &s_set_a;
+  rebuild_current();
+#ifdef MOCK_ANIM_MS
+  int h, m;
+  now_hm(&h, &m);
+  build_set(&s_set_b, m == 0 ? (h + 23) % 24 : h, m == 0 ? 59 : m - 1);
+  s_old = &s_set_b;
+  s_anim = true;
 #endif
-  build_set(&s_cur, h, m);
-  int pm = m == 0 ? 59 : m - 1, ph = m == 0 ? (h + 23) % 24 : h;
-  build_set(&s_prev, ph, pm);
 }
 
 static void window_load(Window *w) {
@@ -103,13 +174,17 @@ static void window_load(Window *w) {
   s_layer = layer_create(bounds);
   layer_set_update_proc(s_layer, update);
   layer_add_child(root, s_layer);
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 }
 
 static void window_unload(Window *w) {
   (void)w;
+  tick_timer_service_unsubscribe();
+  anim_stop();
   layer_destroy(s_layer);
-  free(s_pool_cur); free(s_pool_prev);
-  s_pool_cur = s_pool_prev = NULL;
+  s_layer = NULL;
+  free(s_pool_a); free(s_pool_b);
+  s_pool_a = s_pool_b = NULL;
   scene_deinit();
 }
 
