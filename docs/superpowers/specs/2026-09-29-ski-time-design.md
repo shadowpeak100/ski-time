@@ -119,7 +119,7 @@ Tracks exist only on digit strokes. Ski-in and ski-out paths leave no marks.
 | 0.70 – 1.65 | The avalanche front travels along F from `u0` (the crack) to `u1` (past the bottom-left corner). Its position eases as `a^1.25`. |
 | 1.65 – 1.95 | The wake and billows fade. |
 | 1.45 | The first new skier enters. |
-| about 4.0 – 5.2 | The last skier stops. The exact time depends on the digits. |
+| about 4.0 – 5.7 | The last skier stops. The exact time depends on the digits. |
 
 Old tracks are drawn until the avalanche passes over them. The avalanche erases them by restoring background pixels.
 
@@ -189,7 +189,7 @@ Message keys: `TEMP_F, COMP_1, COMP_2, COMP_3, TIME_24H, LEAD_ZERO, TRACK_STYLE,
   - cubic evaluation and resampling spacing
   - glyph data sanity: every stroke's end is lower than its start, or its climb is within the prototype's ratings
   - time-to-slots for 12/24 hour and leading zero
-  - skier timing: monotonic times, and total duration between 3.5 and 5.5 s for all 1440 minutes
+  - skier timing: monotonic times, and total duration between 3.5 and 6.0 s for all 1440 minutes (the prototype measures 4.0–5.7 s)
   - avalanche front monotonic in τ
   - saver window wrap
 - **Emulator:**
