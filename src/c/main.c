@@ -19,7 +19,8 @@ static Layer *s_layer;
 static Layout s_L;
 static bool s_scene_ok;
 static TrackStyle s_track_style = TRACK_TWIN;
-static uint32_t s_smoke_ms;
+static uint32_t s_smoke_ms, s_smoke_base;   // base advances only while animating
+static bool s_render_logged;
 static bool s_saver;
 static int s_last_min = -1;
 static SkierSet s_set_a, s_set_b;
@@ -85,6 +86,8 @@ static bool build_set(SkierSet *set, int h24, int m) {
 }
 
 static void anim_stop(void) {
+  if (s_anim) s_smoke_base += now_ms() - s_anim_start_ms;
+  s_smoke_ms = s_smoke_base;
   if (s_anim_timer) { app_timer_cancel(s_anim_timer); s_anim_timer = NULL; }
   s_anim = false;
   s_old = NULL;
@@ -120,7 +123,8 @@ static void anim_start(void) {
   s_new = target;
   s_anim = true;
   s_anim_start_ms = now_ms();
-  s_smoke_ms = 0;
+  s_smoke_ms = s_smoke_base;
+  s_render_logged = false;
 #ifndef MOCK_ANIM_MS
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
 #endif
@@ -148,8 +152,9 @@ static void tick_handler(struct tm *tm, TimeUnits changed) {
   bool saver = saver_now();
   if (saver != s_saver) apply_saver(saver);
   if (s_layer) layer_mark_dirty(s_layer);
-  if (tm->tm_min == s_last_min) return;
-  s_last_min = tm->tm_min;
+  int hm = tm->tm_hour * 60 + tm->tm_min;
+  if (hm == s_last_min) return;
+  s_last_min = hm;
 #ifndef MOCK_ANIM_MS
   if (s_saver) rebuild_current();
   else anim_start();
@@ -189,9 +194,16 @@ static void update(Layer *layer, GContext *ctx) {
   Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
   uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;
-  s_smoke_ms = el;
+  s_smoke_ms = s_smoke_base + el;
   Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
 #endif
+  if (s_anim && !s_render_logged && el >= 1200) {
+    uint32_t t0 = now_ms();
+    render_frame(ctx, &f);
+    APP_LOG(APP_LOG_LEVEL_INFO, "render_frame ms %d at t=%d", (int)(now_ms() - t0), (int)el);
+    s_render_logged = true;
+    return;
+  }
   render_frame(ctx, &f);
 }
 
@@ -229,7 +241,7 @@ static void window_load(Window *w) {
   s_layer = layer_create(bounds);
   layer_set_update_proc(s_layer, update);
   layer_add_child(root, s_layer);
-  { int h, m; now_hm(&h, &m); s_last_min = m; }
+  { int h, m; now_hm(&h, &m); s_last_min = h * 60 + m; }
   apply_saver(saver_now());
 }
 
