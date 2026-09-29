@@ -369,7 +369,15 @@ void scene_restore_outside_slope(GContext *ctx, const Layout *L) {
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return;
   uint8_t src[W];
+  int y_lo = H, y_hi = 0;   // outside-slope pixels only exist above the highest ridge point or below the lowest berm point
+  for (int x = 0; x < W; x++) {
+    if (s_ridge_rows[x] > y_hi) y_hi = s_ridge_rows[x];
+    if (s_berm_rows[x] < y_lo) y_lo = s_berm_rows[x];
+  }
+  if (y_hi > H) y_hi = H;
+  if (y_lo < 0) y_lo = 0;
   for (int y = 0; y < H; y++) {
+    if (y >= y_hi && y < y_lo) { y = y_lo - 1; continue; }
     uint8_t *row = fb_row(fb, y);
     unpack_row(s_bg + y * s_stride, src, W);
     for (int x = 0; x < W; x++)
