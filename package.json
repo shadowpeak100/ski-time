@@ -1,0 +1,24 @@
+{
+  "name": "ski-time",
+  "author": "ShadowPeak100",
+  "version": "0.1.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Ski Time",
+    "uuid": "8eee9fbc-c7dc-43a8-995b-6b132d6039bf",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["basalt", "emery"],
+    "capabilities": ["location", "configurable", "health"],
+    "watchapp": { "watchface": true },
+    "messageKeys": [
+      "TEMP_F",
+      "COMP_1", "COMP_2", "COMP_3",
+      "TIME_24H", "LEAD_ZERO", "TRACK_STYLE",
+      "SAVER_ON", "SAVER_START", "SAVER_END"
+    ],
+    "resources": { "media": [] }
+  }
+}
