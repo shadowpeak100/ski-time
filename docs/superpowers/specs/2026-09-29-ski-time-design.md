@@ -40,7 +40,7 @@ All coordinates below are for Emery. Basalt scales them by `k = W/200`, and the 
 | Near peaks | CobaltBlue lit side, OxfordBlue shade side, White/BabyBlueEyes caps. 3 peaks on the left. |
 | Distant forest | Small CadetBlue triangles on the crest, from 0.16W to 0.8W. |
 | Back pine row | Pines with a base 2k below the ridge, 8–15k tall, from 0.17W to 0.86W. The slope fill partly covers them. |
-| Slope | White fill below the ridge curve the ridge curve. The ridge is now defined in the times-of-day spec §4 (yL 0.34H, yR 0.15H, bulge 0.065H). |
+| Slope | White fill below the ridge curve. The ridge is now defined in the times-of-day spec §4 (yL 0.34H, yR 0.15H, bulge 0.065H). |
 | Crest shade | Celeste dither, 8k deep under the ridge. |
 | Front pine row | From 0.2W to 0.8W, spaced 5–11k, 11–22k tall (clamped to the sky above). Three-tier pines: DarkGreen sun side, MidnightGreen shade side, White snow, BulgarianRose trunk. Seeded PRNG, so the pattern is deterministic. |
 | Drift line | A wavy lip at `compTop` (Celeste dither with a soft shadow below). It is the upper edge of the complication strip. |

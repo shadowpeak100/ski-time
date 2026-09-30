@@ -304,6 +304,8 @@ static void test_daypart_windows(void) {
   CHECK_EQ_INT(daypart_at(1218, 442, 1158), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(0, 442, 1158), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(10, 400, 1410), DAY_SUNSET);     // sunset 23:30: window wraps past midnight
+  CHECK_EQ_INT(daypart_at(60, 1380, 300), DAY_MIDDAY);      // midday window wraps midnight (sunset before sunrise)
+  CHECK_EQ_INT(daypart_at(720, 1380, 300), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(1439, 400, 1410), DAY_SUNSET);
 }
 
@@ -328,7 +330,8 @@ static void test_moon_phase(void) {
 #include "decor.h"
 static void test_theme_palette_budget(void) {
   Col8 buf[32];
-  for (int d = 0; d < 4; d++) CHECK(theme_bg_palette(theme_for((Daypart)d), buf) <= 16);
+  static const int budget[4] = { 12, 13, 14, 13 };   // sunrise, day, sunset, night (spec)
+  for (int d = 0; d < 4; d++) CHECK(theme_bg_palette(theme_for((Daypart)d), buf) <= budget[d]);
   CHECK(theme_for(DAY_MIDDAY)->sky[0] == C8(0x55AAFF));   // phase 1 look preserved
   CHECK(theme_for(DAY_NIGHT)->night && theme_for(DAY_NIGHT)->body.kind == BODY_MOON);
   CHECK_EQ_INT(C8(0xFFFFFF), 0xFF); CHECK_EQ_INT(C8(0x000000), 0xC0); CHECK_EQ_INT(C8(0x55AAFF), 0xDB);
@@ -351,9 +354,11 @@ static void test_flood_coverage(void) {
   printf("flood coverage %ld/%ld\n", lit, all);
   for (int i = 0; i < FLOOD_COUNT; i++) CHECK(fh[i].by >= layout_ridge_y(&L, fh[i].bx) + 4);   // pole stands on the slope
   CHECK(lit * 100 >= all * 95);
-  CHECK(flood_at(fh, 1, L.k, fh[0].hx - fh[0].dx * 20, fh[0].hy - fh[0].dy * 20) == 0);   // behind lamp 0
-  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0); // past the end of its cone
-  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 60, fh[0].hy + fh[0].dy * 60) > 0.5f); // bright along its axis
+  for (int i = 0; i < FLOOD_COUNT; i++) {
+    CHECK(flood_at(&fh[i], 1, L.k, fh[i].hx - fh[i].dx * 20, fh[i].hy - fh[i].dy * 20) == 0);   // behind the lamp
+    CHECK(flood_at(&fh[i], 1, L.k, fh[i].hx + fh[i].dx * 230, fh[i].hy + fh[i].dy * 230) == 0); // past the end of its cone
+    CHECK(flood_at(&fh[i], 1, L.k, fh[i].hx + fh[i].dx * 60, fh[i].hy + fh[i].dy * 60) > 0.5f); // bright along its axis
+  }
 }
 // Tree sprite box (x0..x1, y0..y1) and the base band skier feet must not touch.
 typedef struct { int hw, x0, x1, y0, y1; } TreeBox;
