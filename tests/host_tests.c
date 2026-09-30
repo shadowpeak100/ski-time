@@ -283,6 +283,38 @@ static void test_saver_window(void) {
   CHECK(!saver_active(true, 300, 300, 5, 0));              // empty window
 }
 
+#include "daypart.h"
+
+static void test_daypart_windows(void) {
+  CHECK_EQ_INT(daypart_at(442, 442, 1158), DAY_SUNRISE);
+  CHECK_EQ_INT(daypart_at(382, 442, 1158), DAY_SUNRISE);   // 60 min before
+  CHECK_EQ_INT(daypart_at(381, 442, 1158), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_at(501, 442, 1158), DAY_SUNRISE);   // 59 min after
+  CHECK_EQ_INT(daypart_at(502, 442, 1158), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_at(1097, 442, 1158), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_at(1098, 442, 1158), DAY_SUNSET);
+  CHECK_EQ_INT(daypart_at(1218, 442, 1158), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_at(0, 442, 1158), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_at(10, 400, 1410), DAY_SUNSET);     // sunset 23:30: window wraps past midnight
+  CHECK_EQ_INT(daypart_at(1439, 400, 1410), DAY_SUNSET);
+}
+
+static void test_daypart_modes(void) {
+  CHECK_EQ_INT(daypart_for(DPM_ALWAYS_DAY, 0, 442, 1158, 420, 1140), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_for(DPM_FOLLOW, 442, 442, 1158, 600, 900), DAY_SUNRISE);
+  CHECK_EQ_INT(daypart_for(DPM_FIXED, 442, 442, 1158, 600, 900), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_for(DPM_FIXED, 600, 442, 1158, 600, 900), DAY_SUNRISE);
+}
+
+static void test_moon_phase(void) {
+  float n = moon_phase(2024, 1, 11, 11, 57);                // new moon (UTC)
+  CHECK(n < 0.03f || n > 0.97f);
+  float f = moon_phase(2024, 1, 25, 17, 54);                // full moon (UTC)
+  CHECK_NEAR(f, 0.5, 0.03);
+  float q = moon_phase(2024, 1, 18, 3, 52);                 // first quarter
+  CHECK_NEAR(q, 0.25, 0.04);
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -302,6 +334,9 @@ int main(void) {
   test_aval_front_advances();
   test_aval_pixels();
   test_saver_window();
+  test_daypart_windows();
+  test_daypart_modes();
+  test_moon_phase();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
