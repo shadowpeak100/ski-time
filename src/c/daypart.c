@@ -8,7 +8,8 @@ static bool near_event(int m, int ev) {
 Daypart daypart_at(int m, uint16_t sr, uint16_t ss) {
   if (near_event(m, sr)) return DAY_SUNRISE;
   if (near_event(m, ss)) return DAY_SUNSET;
-  return (m >= sr + 60 && m < ss - 60) ? DAY_MIDDAY : DAY_NIGHT;
+  int since_rise_window = ((m - (sr + 60)) % 1440 + 1440) % 1440, span = ((ss - sr - 120) % 1440 + 1440) % 1440;
+  return since_rise_window < span ? DAY_MIDDAY : DAY_NIGHT;   // wrap-aware: sunset may precede sunrise
 }
 
 Daypart daypart_for(uint8_t mode, int m, uint16_t pr, uint16_t ps, uint16_t fr, uint16_t fs) {
