@@ -89,3 +89,8 @@ uint8_t theme_bg_palette(const Theme *t, Col8 out[32]) {
   }
   return n;
 }
+
+Daypart theme_daypart(const Theme *t) {
+  for (int d = 0; d < 4; d++) if (theme_for((Daypart)d) == t) return (Daypart)d;
+  return DAY_MIDDAY;
+}

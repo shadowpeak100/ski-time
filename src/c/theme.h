@@ -20,3 +20,4 @@ typedef struct {
 
 const Theme *theme_for(Daypart d);
 uint8_t theme_bg_palette(const Theme *t, Col8 out[32]);   // distinct colours the stored background may hold
+Daypart theme_daypart(const Theme *t);                  // inverse of theme_for

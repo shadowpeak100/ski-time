@@ -457,6 +457,40 @@ static void test_slope_trees_clear(void) {
   }
 }
 
+#include "weather.h"
+static void test_wx_from_wmo(void) {
+  const int c[] = { 0, 1, 2, 3, 45, 48, 51, 57, 61, 67, 80, 82, 71, 77, 85, 86, 95, 99, 4, 100, -1 };
+  const WxKind e[] = { WX_CLEAR, WX_PARTLY, WX_PARTLY, WX_OVERCAST, WX_FOG, WX_FOG, WX_DRIZZLE, WX_DRIZZLE,
+                       WX_RAIN, WX_RAIN, WX_RAIN, WX_RAIN, WX_SNOW, WX_SNOW, WX_SNOW, WX_SNOW, WX_STORM, WX_STORM,
+                       WX_CLEAR, WX_CLEAR, WX_CLEAR };
+  for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++) CHECK_EQ_INT(wx_from_wmo(c[i]), e[i]);
+  CHECK(!wx_moves(WX_CLEAR) && !wx_moves(WX_FOG) && wx_moves(WX_RAIN) && wx_moves(WX_SNOW) && wx_moves(WX_STORM));
+}
+static void test_wx_tables(void) {
+  Col8 s[4];
+  CHECK_EQ_INT(wx_sky(DAY_SUNSET, WX_OVERCAST, s), 3); CHECK(s[0] == C8(0x555555) && s[2] == C8(0xFFAA55));
+  CHECK_EQ_INT(wx_sky(DAY_NIGHT, WX_STORM, s), 2);     CHECK(s[1] == C8(0x555555));
+  CHECK_EQ_INT(wx_sky(DAY_MIDDAY, WX_CLEAR, s), theme_for(DAY_MIDDAY)->nsky);
+  CHECK(wx_cloud_roles(DAY_MIDDAY, WX_STORM)[1] == C8(0x555555));
+  CHECK(wx_cloud_roles(DAY_MIDDAY, WX_PARTLY) == theme_for(DAY_MIDDAY)->cloud);
+  CHECK(wx_rain_colour(DAY_NIGHT) == C8(0xAAAAFF) && wx_fog_colour(DAY_MIDDAY) == C8(0xFFFFFF));
+  for (int d = 0; d < 4; d++) CHECK(theme_daypart(theme_for((Daypart)d)) == (Daypart)d);
+}
+static void test_wx_palette_budget(void) {
+  Col8 b[32], t[32];
+  for (int d = 0; d < 4; d++) {
+    CHECK_EQ_INT(wx_bg_palette((Daypart)d, WX_CLEAR, b), theme_bg_palette(theme_for((Daypart)d), t));
+    for (int w = 0; w < WX_COUNT; w++) CHECK(wx_bg_palette((Daypart)d, (WxKind)w, b) <= 16);
+  }
+}
+static void test_effective_mode(void) {
+  CHECK_EQ_INT(effective_anim_mode(ANIM_FULL, false, 1320, 420, 23, 0), ANIM_FULL);
+  CHECK_EQ_INT(effective_anim_mode(ANIM_FULL, true, 1320, 420, 23, 0), ANIM_SAVER);
+  CHECK_EQ_INT(effective_anim_mode(ANIM_BALANCED, true, 1320, 420, 12, 0), ANIM_BALANCED);
+  CHECK_EQ_INT(effective_anim_mode(ANIM_SAVER, false, 1320, 420, 12, 0), ANIM_SAVER);
+  CHECK_EQ_INT(effective_anim_mode(7, false, 1320, 420, 12, 0), ANIM_BALANCED);
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -483,6 +517,10 @@ int main(void) {
   test_theme_palette_budget();
   test_flood_coverage();
   test_slope_trees_clear();
+  test_wx_from_wmo();
+  test_wx_tables();
+  test_wx_palette_budget();
+  test_effective_mode();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
