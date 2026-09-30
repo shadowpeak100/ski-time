@@ -1,5 +1,6 @@
 #include "sprites.h"
 #include "fb.h"
+#include "scene.h"
 
 #define QUARTER_TURN (TRIG_MAX_ANGLE / 4)
 #define SPRAY_STEP 2921   // 0.28 rad in trig units
@@ -79,7 +80,7 @@ void sprites_skier(GContext *ctx, int16_t x_q4, int16_t y_q4, int32_t h, uint8_t
 
 void sprites_spray(GContext *ctx, int16_t x_q4, int16_t y_q4, int32_t h, uint8_t spray, float k) {
   float x = x_q4 / 16.0f, y = y_q4 / 16.0f, u = spray / 255.0f;
-  graphics_context_set_fill_color(ctx, u < 0.5f ? GColorBabyBlueEyes : GColorCeleste);
+  graphics_context_set_fill_color(ctx, u < 0.5f ? SCENE_ROLE(snow_shadow) : SCENE_ROLE(snow_shade));
   int32_t side = h + QUARTER_TURN;
   for (int j = 0; j < 6; j++) {
     int32_t a = side + (2 * j - 5) * SPRAY_STEP / 2;

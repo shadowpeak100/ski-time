@@ -74,11 +74,11 @@ static void pixel_pass(GContext *ctx, const Layout *L, uint16_t t) {
     for (int x = 0; x < W; x++) {
       if (y < top[x] || y >= bot[x]) continue;
       switch (aval_pixel(&s_A, s_streak, L->k, x, y, t)) {
-        case AV_SHADOW:  row[x] = GColorBabyBlueEyes.argb; break;
+        case AV_SHADOW:  row[x] = SCENE_ROLE(snow_shadow).argb; break;
         case AV_RESTORE: row[x] = src[x]; break;
-        case AV_WHITE:   row[x] = GColorWhite.argb; break;
-        case AV_CELESTE: row[x] = GColorCeleste.argb; break;
-        case AV_BLUE:    row[x] = GColorBabyBlueEyes.argb; break;
+        case AV_WHITE:   row[x] = SCENE_ROLE(powder).argb; break;
+        case AV_CELESTE: row[x] = SCENE_ROLE(snow_shade).argb; break;
+        case AV_BLUE:    row[x] = SCENE_ROLE(snow_shadow).argb; break;
         default: break;
       }
     }
@@ -96,8 +96,8 @@ static void back_billows(GContext *ctx, const Layout *L, float tau, bool top) {
     if (r < 0.6f) continue;
     Vec2 q = pt(aval_front(&s_A, s) - (11 + 5 * aval_noise(s * 0.09f)) * k * grow, s);
     if (!in_view(L, q)) continue;
-    if (top) disc(ctx, q.x, q.y, r * 0.82f, GColorWhite);
-    else disc(ctx, q.x + 0.8f * k, q.y + 1.1f * k, r, GColorCeleste);
+    if (top) disc(ctx, q.x, q.y, r * 0.82f, SCENE_ROLE(powder));
+    else disc(ctx, q.x + 0.8f * k, q.y + 1.1f * k, r, SCENE_ROLE(snow_shade));
   }
 }
 
@@ -111,12 +111,12 @@ static void lead_billows(GContext *ctx, GBitmap *fb, const Layout *L, float tau,
     if (!in_view(L, q)) continue;
     switch (layer) {
       case HALO:
-        fb_dither_circle(fb, fb_floor(q.x), fb_floor(q.y), fb_round(r + 2 * k), GColorCeleste, 77,
+        fb_dither_circle(fb, fb_floor(q.x), fb_floor(q.y), fb_round(r + 2 * k), SCENE_ROLE(snow_shade), 77,
                          scene_ridge_rows(), scene_berm_rows());
         break;
-      case SHADE: disc(ctx, q.x + 0.8f * k, q.y + 1.2f * k, r, GColorBabyBlueEyes); break;
-      case MID:   disc(ctx, q.x + 0.3f * k, q.y + 0.5f * k, r * 0.95f, GColorCeleste); break;
-      default:    disc(ctx, q.x - 0.4f * k, q.y - 0.5f * k, r * 0.8f, GColorWhite); break;
+      case SHADE: disc(ctx, q.x + 0.8f * k, q.y + 1.2f * k, r, SCENE_ROLE(snow_shadow)); break;
+      case MID:   disc(ctx, q.x + 0.3f * k, q.y + 0.5f * k, r * 0.95f, SCENE_ROLE(snow_shade)); break;
+      default:    disc(ctx, q.x - 0.4f * k, q.y - 0.5f * k, r * 0.8f, SCENE_ROLE(powder)); break;
     }
   }
 }
@@ -142,16 +142,16 @@ static void vector_pass(GContext *ctx, const Layout *L, uint16_t t) {
     if (!in_view(L, q)) continue;
     float hop = fabsf_(geom_sin(tau * 9 + m * 1.7f)) * 2.5f * k;
     int qx = fb_round(q.x), qy = fb_round(q.y), hy = fb_round(q.y - hop);
-    dot(ctx, qx, qy + 1, cs, 1, GColorBabyBlueEyes);
-    dot(ctx, qx, hy - cs + 1, cs, cs, GColorWhite);
-    dot(ctx, qx + cs - 1, hy, 1, 1, GColorCeleste);
+    dot(ctx, qx, qy + 1, cs, 1, SCENE_ROLE(snow_shadow));
+    dot(ctx, qx, hy - cs + 1, cs, cs, SCENE_ROLE(powder));
+    dot(ctx, qx + cs - 1, hy, 1, 1, SCENE_ROLE(snow_shade));
   }
   // Loose snow sparkling just ahead of the front.
   uint32_t fr = (uint32_t)(tau * 14);
   for (int m = 0; m < 70; m++) {
     float s = L->s_min + H37[m] / 256.0f * span;
     Vec2 q = pt(aval_front(&s_A, s) + hash2(m, fr) * 9 * k * grow, s);
-    dot(ctx, fb_round(q.x), fb_round(q.y), 1, 1, m % 3 ? GColorBabyBlueEyes : GColorLightGray);
+    dot(ctx, fb_round(q.x), fb_round(q.y), 1, 1, m % 3 ? SCENE_ROLE(snow_shadow) : GColorLightGray);
   }
 }
 

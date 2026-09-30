@@ -14,6 +14,19 @@ static int16_t s_stride;
 static int16_t *s_ridge_rows, *s_berm_rows;
 static bool s_bg_valid;
 static float s_chim_x, s_chim_y;   // smoke origin, kept in float so the puffs drift sub-pixel as in the prototype
+static const Theme *s_theme;
+static float s_moon;
+
+void scene_set_theme(const Theme *t, float moon_phase) {
+  if (t == s_theme && moon_phase == s_moon) return;
+  s_theme = t;
+  s_moon = moon_phase;
+  s_bg_valid = false;
+}
+
+const Theme *scene_theme(void) { return s_theme ? s_theme : theme_for(DAY_MIDDAY); }
+
+static GColor gcol(Col8 c) { return (GColor){ .argb = c }; }
 
 static int16_t iceil(float v) { return -fb_floor(-v); }
 static bool dith(int x, int y, float p) { return aval_bayer(x, y) * 16 + 8 < p * 256; }
@@ -73,14 +86,15 @@ static void fill_rot_ellipse(GContext *ctx, float cx, float cy, float rx, float 
 }
 
 static void pine(GContext *ctx, float x, float base, float h) {
+  const Theme *tm = scene_theme();
   rect(ctx, fb_round(x - 0.5f), fb_round(base - h * 0.16f), 1, iceil(h * 0.16f), GColorBulgarianRose);
   for (int i = 0; i < 3; i++) {
     float top = base - h + i * h * 0.27f, bot = top + h * 0.46f, hw = h * (0.2f + i * 0.1f), th = bot - top;
-    fb_fill_tri(ctx, x - hw, bot, x, top, x, bot, GColorDarkGreen);
-    fb_fill_tri(ctx, x, top, x + hw, bot, x, bot, GColorMidnightGreen);
+    fb_fill_tri(ctx, x - hw, bot, x, top, x, bot, gcol(tm->pine_lit));
+    fb_fill_tri(ctx, x, top, x + hw, bot, x, bot, gcol(tm->pine_shade));
     const float snow[8] = { x, top, x - hw * 0.55f, top + th * 0.55f, x - hw * 0.2f, top + th * 0.42f,
                             x + hw * 0.25f, top + th * 0.45f };
-    poly(ctx, snow, 4, GColorWhite);
+    poly(ctx, snow, 4, gcol(tm->pine_snow));
   }
 }
 
@@ -98,34 +112,82 @@ static void peak(GContext *ctx, float px, float py, float hw, float base,
   poly(ctx, cr, 5, cap_shade);
 }
 
+// Sky gradient dithered across the theme's stops, with the sun disc and its dithered halo.
 static void sky_pass(GContext *ctx, const Layout *L) {
-  int W = L->W, H = L->H;
-  float k = L->k, sx = W * 0.13f, sy = H * 0.08f, sr = 7 * k, halo = 6 * k, horizon = layout_ridge_y(L, 0) * 0.92f;
-  uint8_t celeste = GColorCeleste.argb, picton = GColorPictonBlue.argb;
-  uint8_t sun = GColorIcterine.argb, glow = GColorPastelYellow.argb;
+  const Theme *th = scene_theme();
+  const Body *B = &th->body;
+  int W = L->W, H = L->H, ns = th->nsky - 1;
+  float k = L->k, sx = W * B->x, sy = H * B->y, sr = B->r * k, halo = B->halo * k, horizon = layout_ridge_y(L, 0) * 0.92f;
+  bool sun = B->kind == BODY_SUN;
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   for (int y = 0; y < H; y++) {
     float f = y / horizon;
     f = f < 0 ? 0 : f > 1 ? 1 : f;
-    float t = f * root5(f), dy = y + 0.5f - sy;
+    float t = f * root5(f) * ns, dy = y + 0.5f - sy;
+    int i = (int)t < ns - 1 ? (int)t : ns - 1;
+    uint8_t lo = th->sky[i], hi = th->sky[i + 1];
+    t -= i;
     uint8_t *row = fb_row(fb, y);
     for (int x = 0; x < W; x++) {
-      row[x] = dith(x, y, t) ? celeste : picton;
+      row[x] = dith(x, y, t) ? hi : lo;
+      if (!sun) continue;
       float dx = x + 0.5f - sx, d2 = dx * dx + dy * dy;
-      if (d2 < sr * sr) row[x] = sun;
+      if (d2 < sr * sr) row[x] = B->core;
       else if (d2 < (sr + halo) * (sr + halo)) {
         float q = 1 - (geom_sqrt(d2) - sr) / halo, q5 = root5(q);
-        if (dith(x, y, q * q5 * q5 * 0.85f)) row[x] = glow;
+        if (dith(x, y, q * q5 * q5 * 0.85f)) row[x] = B->glow;
       }
     }
   }
   graphics_release_frame_buffer(ctx, fb);
 }
 
+// 48 stars above the ridge; every ninth gets a plus-shaped glint.
+static void stars_pass(GContext *ctx, const Layout *L) {
+  int W = L->W, H = L->H;
+  GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  Mulberry r = { 99 };
+  for (int n = 0; n < 48; n++) {
+    int x = fb_floor(mulberry_next(&r) * W), y = fb_floor(mulberry_next(&r) * (H * 0.36f));
+    float c = mulberry_next(&r);
+    if (y > layout_ridge_y(L, x) - 3) continue;
+    fb_row(fb, y)[x] = c < 0.7f ? C8(0xFFFFFF) : c < 0.9f ? C8(0xAAFFFF) : C8(0xFFFFAA);
+    if (n % 9) continue;
+    const int8_t d[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+    for (int j = 0; j < 4; j++) {
+      int gx = x + d[j][0], gy = y + d[j][1];
+      if (gx >= 0 && gx < W && gy >= 0) fb_row(fb, gy)[gx] = C8(0x5555AA);
+    }
+  }
+  graphics_release_frame_buffer(ctx, fb);
+}
+
+// Moon lit per pixel for the stored phase (0 new, 0.5 full; waxing lit on the right), with a faint dithered rim.
+static void moon_pass(GContext *ctx, const Layout *L) {
+  const Body *B = &scene_theme()->body;
+  int W = L->W, H = L->H;
+  float k = L->k, mx = W * B->x, my = H * B->y, mr = B->r * k, rim = 3 * k / mr, kx = geom_cos(6.2831853f * s_moon);
+  GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  for (int y = fb_floor(my - mr - 3 * k); y <= my + mr + 3 * k; y++)
+    for (int x = fb_floor(mx - mr - 3 * k); x <= mx + mr + 3 * k; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      float xn = (x + 0.5f - mx) / mr, yn = (y + 0.5f - my) / mr, r2 = xn * xn + yn * yn, rr = geom_sqrt(r2);
+      uint8_t *px = &fb_row(fb, y)[x];
+      if (rr > 1) {
+        if (rr < 1 + rim && dith(x, y, 0.3f * (1 - (rr - 1) / rim))) *px = C8(0x000055);
+        continue;
+      }
+      float w = 1 - yn * yn, xt = geom_sqrt(w > 0 ? w : 0) * kx;
+      bool lit = s_moon < 0.5f ? xn > xt : xn < -xt;
+      *px = !lit ? C8(0x000055) : r2 > 0.72f ? C8(0xAAAAAA) : C8(0xFFFFFF);
+    }
+  graphics_release_frame_buffer(ctx, fb);
+}
+
 static void shade_pass(GContext *ctx, const Layout *L) {
   int W = L->W, H = L->H;
   float k = L->k;
-  uint8_t celeste = GColorCeleste.argb;
+  uint8_t celeste = scene_theme()->snow_shade;
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   for (int x = 0; x < W; x++) {
     float ry = layout_ridge_y(L, x);
@@ -168,22 +230,25 @@ static bool build_bg(GContext *ctx, const Layout *L) {
   float k = L->k;
   s_npal = 0;
   graphics_context_set_antialiased(ctx, false);   // crisp pixel art: palette colours only, no blended edges
+  const Theme *th = scene_theme();
   sky_pass(ctx, L);
+  if (th->stars) stars_pass(ctx, L);
+  if (th->body.kind == BODY_MOON) moon_pass(ctx, L);
 
   static const float far[5][3] = { { .05f, .17f, .17f }, { .22f, .12f, .15f }, { .40f, .10f, .17f },
                                    { .58f, .06f, .15f }, { .74f, .035f, .12f } };
   for (int i = 0; i < 5; i++)
     peak(ctx, far[i][0] * W, far[i][1] * H, far[i][2] * W, H * 0.45f,
-         GColorBabyBlueEyes, GColorLiberty, GColorWhite, GColorCeleste);
+         gcol(th->far[0]), gcol(th->far[1]), gcol(th->far[2]), gcol(th->far[3]));
   static const float near[3][3] = { { -.04f, .215f, .2f }, { .18f, .22f, .15f }, { .34f, .19f, .13f } };
   for (int i = 0; i < 3; i++)
     peak(ctx, near[i][0] * W, near[i][1] * H, near[i][2] * W, H * 0.5f,
-         GColorCobaltBlue, GColorOxfordBlue, GColorWhite, GColorBabyBlueEyes);
+         gcol(th->near_[0]), gcol(th->near_[1]), gcol(th->near_[2]), gcol(th->near_[3]));
 
   Mulberry r = { 7 };
   for (float x = W * 0.16f; x < W * 0.8f; x += 3.5f * k + mulberry_next(&r) * 3 * k) {
     float b = layout_ridge_y(L, x) + 1, h = (4 + mulberry_next(&r) * 5) * k * (x > W * 0.62f ? 0.6f : 1), hw = h * 0.35f;
-    fb_fill_tri(ctx, x - hw, b, x, b - h, x + hw, b, GColorCadetBlue);
+    fb_fill_tri(ctx, x - hw, b, x, b - h, x + hw, b, gcol(th->forest));
   }
 
   Mulberry r3 = { 33 };
@@ -199,7 +264,7 @@ static bool build_bg(GContext *ctx, const Layout *L) {
   slope[n++] = GPoint(W + 2, fb_floor(layout_ridge_y(L, W)));
   slope[n++] = GPoint(W + 2, H + 2);
   slope[n++] = GPoint(-2, H + 2);
-  fb_fill_poly(ctx, slope, (uint16_t)n, GColorWhite);
+  fb_fill_poly(ctx, slope, (uint16_t)n, gcol(th->snow));
 
   shade_pass(ctx, L);
 
@@ -220,6 +285,7 @@ static bool build_bg(GContext *ctx, const Layout *L) {
   if (!fb) return false;
   for (int y = 0; y < H; y++) pack_row(fb_row(fb, y), s_bg + y * s_stride, W);
   graphics_release_frame_buffer(ctx, fb);
+  APP_LOG(APP_LOG_LEVEL_INFO, "bg palette %d colours", s_npal);
   return true;
 }
 
@@ -289,7 +355,7 @@ void scene_draw_chalet(GContext *ctx, const Layout *L) {
   graphics_context_set_antialiased(ctx, false);
 
   pine(ctx, ex - 3 * k, b - rise - c.h * 0.25f, c.h * 0.9f);
-  fill_rot_ellipse(ctx, fx1 + run * 0.55f, b - rise * 0.4f + 1, c.w * 0.42f, 2.5f * k, -0.1f, GColorCeleste);
+  fill_rot_ellipse(ctx, fx1 + run * 0.55f, b - rise * 0.4f + 1, c.w * 0.42f, 2.5f * k, -0.1f, SCENE_ROLE(snow_shade));
 
   // side wall in shade, glowing windows
   const float wall[8] = { fx1, ey, ex, ey - rise, ex, b - rise, fx1, b };
@@ -325,28 +391,28 @@ void scene_draw_chalet(GContext *ctx, const Layout *L) {
   // side roof plane under snow, with eave band, fascia and icicles
   float o = 2 * k;
   const float roof[8] = { ax, ay, ax + run, ay - rise, ex + o, ey - rise + o, fx1 + o, ey + o };
-  poly(ctx, roof, 4, GColorWhite);
+  poly(ctx, roof, 4, SCENE_ROLE(powder));
   const float eave[8] = { fx1 + o, ey + o, ex + o, ey - rise + o, ex + o, ey - rise + o - 2.5f * k, fx1 + o, ey + o - 2.5f * k };
-  poly(ctx, eave, 4, GColorCeleste);
+  poly(ctx, eave, 4, SCENE_ROLE(snow_shade));
   // 1-px fascia band [edge, edge+1): the row whose centre falls inside it, per column
   for (int x = fb_floor(fx1 + o); x < fb_round(ex + o); x++) {
     float edge = ey + o - rise * (x + 0.5f - (fx1 + o)) / run;
     rect(ctx, x, iceil(edge - 0.5f), 1, 1, GColorBulgarianRose);
   }
   for (float x = fx1 + o + 2 * k; x < ex; x += 3 * k)
-    rect(ctx, fb_round(x), fb_round(ey + o + 1 - UP(x)), 1, 1 + ((int)(x * 7) % 2), GColorCeleste);
+    rect(ctx, fb_round(x), fb_round(ey + o + 1 - UP(x)), 1, 1 + ((int)(x * 7) % 2), SCENE_ROLE(snow_shade));
 
   // front bargeboards with snow
   const float ends[2][2] = { { fx0 - o, ey + o }, { fx1 + o, ey + o } };
   for (int i = 0; i < 2; i++) {
     capsule(ctx, ax, ay, ends[i][0], ends[i][1], 2 * k, GColorBulgarianRose);
-    capsule(ctx, ax, ay - k, ends[i][0], ends[i][1] - 1.2f * k, 1.4f * k, GColorWhite);
+    capsule(ctx, ax, ay - k, ends[i][0], ends[i][1] - 1.2f * k, 1.4f * k, SCENE_ROLE(powder));
   }
 
   // chimney on the side roof
   float cx = ax + run * 0.62f, cy = ay - rise * 0.62f + (ey - ay) * 0.3f;
   rect(ctx, fb_round(cx - 1.5f * k), fb_round(cy - 6 * k), fb_round(3 * k), fb_round(7 * k), GColorDarkGray);
-  rect(ctx, fb_round(cx - 2 * k), fb_round(cy - 6 * k - 1), fb_round(4 * k), 2, GColorWhite);
+  rect(ctx, fb_round(cx - 2 * k), fb_round(cy - 6 * k - 1), fb_round(4 * k), 2, SCENE_ROLE(powder));
   s_chim_x = cx; s_chim_y = cy - 6 * k - 2;
 #undef UP
 }
@@ -359,7 +425,7 @@ void scene_draw_smoke(GContext *ctx, const Layout *L, uint32_t ms) {
     if (p > 0.9f) continue;
     float r = (0.8f + p * 2.4f) * k;
     fb_fill_ellipse(ctx, s_chim_x + p * 8 * k + geom_sin(p * 6 + i) * 1.2f * k, s_chim_y - p * 16 * k, r, r,
-                    p < 0.45f ? GColorLightGray : GColorCeleste);
+                    p < 0.45f ? GColorLightGray : SCENE_ROLE(snow_shade));
   }
 }
 

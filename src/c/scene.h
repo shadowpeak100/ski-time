@@ -3,9 +3,15 @@
 
 #include <pebble.h>
 #include "layout.h"
+#include "theme.h"
+
+// Colour of a theme role (powder, snow_shade, ...) as a GColor.
+#define SCENE_ROLE(field) ((GColor){ .argb = scene_theme()->field })
 
 bool scene_init(const Layout *L);                 // allocates the background buffer + ridge/berm row tables
 void scene_deinit(void);
+void scene_set_theme(const Theme *t, float moon_phase);   // rebuilds the background if either changed
+const Theme *scene_theme(void);
 void scene_invalidate(void);                      // rebuild the background on next draw
 void scene_blit(GContext *ctx, const Layout *L);  // builds the background if needed, then copies it to the framebuffer
 bool scene_ready(void);                           // background built and available

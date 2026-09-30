@@ -232,11 +232,24 @@ static void build_skiers(void) {
 #endif
 }
 
+// Midday until the daypart follows the clock; MOCK_DAYPART forces a phase with today's moon.
+static void apply_theme(void) {
+#ifdef MOCK_DAYPART
+  time_t t = time(NULL);
+  struct tm *lt = localtime(&t);
+  scene_set_theme(theme_for(MOCK_DAYPART),
+                  moon_phase(lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, lt->tm_hour, lt->tm_min));
+#else
+  scene_set_theme(theme_for(DAY_MIDDAY), 0);
+#endif
+}
+
 static void window_load(Window *w) {
   Layer *root = window_get_root_layer(w);
   GRect bounds = layer_get_bounds(root);
   layout_init(&s_L, bounds.size.w, bounds.size.h);
   s_scene_ok = scene_init(&s_L);
+  apply_theme();
   aval_draw_init();
   build_skiers();
   s_layer = layer_create(bounds);

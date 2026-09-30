@@ -1,5 +1,6 @@
 #include "comps.h"
 #include "settings.h"
+#include "scene.h"
 
 static int s_temp_f;
 static bool s_temp_valid, s_saver;
@@ -56,7 +57,7 @@ void comps_draw(GContext *ctx, const Layout *L) {
   // Glyphs sit high in their bounds rect; bias up 4 px to centre visually.
   int16_t y = (int16_t)(L->comp_top + (L->comp_h - text_h) / 2 - 4);
   GRect strip = GRect(k4, y, L->W - 2 * k4, text_h);
-  graphics_context_set_text_color(ctx, GColorLiberty);
+  graphics_context_set_text_color(ctx, SCENE_ROLE(text));
   const GTextAlignment aligns[3] = { GTextAlignmentLeft, GTextAlignmentCenter, GTextAlignmentRight };
   const Settings *st = settings_get();
   for (int i = 0; i < 3; i++) {
