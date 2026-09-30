@@ -17,7 +17,8 @@
       "TEMP_F",
       "COMP_1", "COMP_2", "COMP_3",
       "TIME_24H", "LEAD_ZERO", "TRACK_STYLE",
-      "SAVER_ON", "SAVER_START", "SAVER_END"
+      "SAVER_ON", "SAVER_START", "SAVER_END",
+      "DAYPART_MODE", "SUN_FIXED_RISE", "SUN_FIXED_SET", "SUNRISE", "SUNSET"
     ],
     "resources": { "media": [] }
   }

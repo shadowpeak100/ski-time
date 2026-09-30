@@ -9,8 +9,11 @@
 #include "settings.h"
 #include "comps.h"
 #include "saver.h"
+#include "daypart.h"
+#include "theme.h"
 
 #define PERSIST_KEY_TEMP_F 0
+#define PERSIST_KEY_SUN 2   // key 1 is Settings
 
 typedef struct { const SkierSet *old; const SkierSet *neu; uint16_t t; } Frame;   // old == NULL -> resting
 
@@ -20,7 +23,6 @@ static Layout s_L;
 static bool s_scene_ok;
 static TrackStyle s_track_style = TRACK_TWIN;
 static uint32_t s_smoke_ms, s_smoke_base;   // base advances only while animating
-static bool s_render_logged;
 static bool s_saver;
 static int s_last_min = -1;
 static SkierSet s_set_a, s_set_b;
@@ -29,6 +31,9 @@ static SkierSet *s_old, *s_new;
 static bool s_anim;
 static uint32_t s_anim_start_ms;
 static AppTimer *s_anim_timer;
+static uint16_t s_sun_rise = 420, s_sun_set = 1140;   // phone data, minutes of day
+static float s_moon;                                  // phase for the cached date
+static int s_moon_yday = -1;
 #define ANIM_FRAME_MS 40
 
 static void render_frame(GContext *ctx, const Frame *f) {
@@ -88,6 +93,35 @@ static bool build_set(SkierSet *set, int h24, int m) {
   return set->count > 0;
 }
 
+static Daypart current_daypart(int h, int m) {
+#ifdef MOCK_DAYPART
+  (void)h; (void)m;
+  return MOCK_DAYPART;
+#else
+  const Settings *st = settings_get();
+  return daypart_for(st->daypart_mode, h * 60 + m, s_sun_rise, s_sun_set, st->fixed_rise, st->fixed_set);
+#endif
+}
+
+// Moon is only recomputed when the date changes, and non-night themes get phase 0 so the
+// background is not rebuilt on every minute.
+static void apply_theme(void) {
+  int h, m;
+  now_hm(&h, &m);
+  Daypart dp = current_daypart(h, m);
+  float moon = 0;
+  if (dp == DAY_NIGHT) {
+    time_t t = time(NULL);
+    struct tm *lt = localtime(&t);
+    if (lt->tm_yday != s_moon_yday) {
+      s_moon = moon_phase(lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, h, m);
+      s_moon_yday = lt->tm_yday;
+    }
+    moon = s_moon;
+  }
+  scene_set_theme(theme_for(dp), moon);
+}
+
 static void anim_stop(void) {
   if (s_anim) s_smoke_base += now_ms() - s_anim_start_ms;
   s_smoke_ms = s_smoke_base;
@@ -101,7 +135,11 @@ static void anim_timer_cb(void *data) {
   (void)data;
   s_anim_timer = NULL;
   uint32_t t = now_ms() - s_anim_start_ms;
-  if (t >= skiers_duration(s_new)) { anim_stop(); return; }
+  if (t >= skiers_duration(s_new)) {
+    anim_stop();
+    APP_LOG(APP_LOG_LEVEL_INFO, "heap free at rest %d", (int)heap_bytes_free());
+    return;
+  }
   layer_mark_dirty(s_layer);
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
 }
@@ -111,6 +149,7 @@ static void rebuild_current(void) {
   int h, m;
   now_hm(&h, &m);
   anim_stop();
+  apply_theme();
   SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
   if (build_set(target, h, m)) s_new = target;
 }
@@ -121,13 +160,13 @@ static void anim_start(void) {
   SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
   int h, m;
   now_hm(&h, &m);
+  apply_theme();   // before the first animated frame
   if (!build_set(target, h, m)) return;
   s_old = s_new;
   s_new = target;
   s_anim = true;
   s_anim_start_ms = now_ms();
   s_smoke_ms = s_smoke_base;
-  s_render_logged = false;
 #ifndef MOCK_ANIM_MS
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
 #endif
@@ -177,7 +216,15 @@ static void inbox_received(DictionaryIterator *it, void *ctx) {
   if (t) {
     comps_set_temp((int)t->value->int32, true);
     persist_write_int(PERSIST_KEY_TEMP_F, (int)t->value->int32);
-  } else if (settings_apply_message(it)) {
+  }
+  Tuple *rise = dict_find(it, MESSAGE_KEY_SUNRISE), *set = dict_find(it, MESSAGE_KEY_SUNSET);
+  if (rise || set) {   // takes effect at the next minute change
+    if (rise) s_sun_rise = (uint16_t)rise->value->int32;
+    if (set) s_sun_set = (uint16_t)set->value->int32;
+    uint16_t sun[2] = { s_sun_rise, s_sun_set };
+    persist_write_data(PERSIST_KEY_SUN, sun, sizeof(sun));
+  }
+  if (settings_apply_message(it)) {
     s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
     anim_stop();
     rebuild_current();
@@ -201,13 +248,6 @@ static void update(Layer *layer, GContext *ctx) {
   s_smoke_ms = s_smoke_base + el;
   Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
 #endif
-  if (s_anim && !s_render_logged && el >= 1200) {
-    uint32_t t0 = now_ms();
-    render_frame(ctx, &f);
-    APP_LOG(APP_LOG_LEVEL_INFO, "render_frame ms %d at t=%d", (int)(now_ms() - t0), (int)el);
-    s_render_logged = true;
-    return;
-  }
   render_frame(ctx, &f);
 }
 
@@ -215,7 +255,6 @@ static void build_skiers(void) {
   uint16_t cap = SKI_POOL_CAP(s_L.W);
   s_pool_a = malloc(cap * sizeof(SkPt));
   s_pool_b = malloc(cap * sizeof(SkPt));
-  APP_LOG(APP_LOG_LEVEL_INFO, "heap free %d", (int)heap_bytes_free());
   if (!s_pool_a || !s_pool_b) {
     free(s_pool_a); free(s_pool_b);
     s_pool_a = s_pool_b = NULL;
@@ -232,18 +271,6 @@ static void build_skiers(void) {
   build_set(prev, m == 0 ? (h + 23) % 24 : h, m == 0 ? 59 : m - 1);
   s_old = prev;
   s_anim = true;
-#endif
-}
-
-// Midday until the daypart follows the clock; MOCK_DAYPART forces a phase with today's moon.
-static void apply_theme(void) {
-#ifdef MOCK_DAYPART
-  time_t t = time(NULL);
-  struct tm *lt = localtime(&t);
-  scene_set_theme(theme_for(MOCK_DAYPART),
-                  moon_phase(lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, lt->tm_hour, lt->tm_min));
-#else
-  scene_set_theme(theme_for(DAY_MIDDAY), 0);
 #endif
 }
 
@@ -276,6 +303,11 @@ static void init(void) {
   settings_load();
   s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
   if (persist_exists(PERSIST_KEY_TEMP_F)) comps_set_temp(persist_read_int(PERSIST_KEY_TEMP_F), true);
+  uint16_t sun[2];
+  if (persist_get_size(PERSIST_KEY_SUN) == (int)sizeof(sun)) {
+    persist_read_data(PERSIST_KEY_SUN, sun, sizeof(sun));
+    s_sun_rise = sun[0]; s_sun_set = sun[1];
+  }
   update_health();
   app_message_register_inbox_received(inbox_received);
   app_message_open(128, 16);
@@ -286,7 +318,6 @@ int main(void) {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers){ .load = window_load, .unload = window_unload });
   window_stack_push(s_window, true);
-  APP_LOG(APP_LOG_LEVEL_INFO, "heap free after init %d", (int)heap_bytes_free());
   app_event_loop();
   window_destroy(s_window);
   app_message_deregister_callbacks();

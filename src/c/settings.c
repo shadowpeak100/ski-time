@@ -12,6 +12,9 @@ static const Settings DEFAULTS = {
   .saver_enabled = 0,
   .saver_start = 1320,   // 22:00
   .saver_end = 420,      // 07:00
+  .daypart_mode = 0,
+  .fixed_rise = 420,
+  .fixed_set = 1140,
 };
 
 void settings_load(void) {
@@ -47,6 +50,9 @@ bool settings_apply_message(DictionaryIterator *it) {
   changed |= set_u8(it, MESSAGE_KEY_SAVER_ON, &s.saver_enabled);
   changed |= set_u16(it, MESSAGE_KEY_SAVER_START, &s.saver_start);
   changed |= set_u16(it, MESSAGE_KEY_SAVER_END, &s.saver_end);
+  changed |= set_u8(it, MESSAGE_KEY_DAYPART_MODE, &s.daypart_mode);
+  changed |= set_u16(it, MESSAGE_KEY_SUN_FIXED_RISE, &s.fixed_rise);
+  changed |= set_u16(it, MESSAGE_KEY_SUN_FIXED_SET, &s.fixed_set);
   if (changed) persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
   return changed;
 }

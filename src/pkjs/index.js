@@ -11,12 +11,17 @@ function logErr(prefix, e) {
   console.log('[ski-time] ' + prefix + ': ' + (e && e.message ? e.message : e));
 }
 
-function sendTemp(t) {
+function sendWeather(msg) {
   Pebble.sendAppMessage(
-    { TEMP_F: t },
-    function() { console.log('[ski-time] sent TEMP_F=' + t); },
+    msg,
+    function() { console.log('[ski-time] sent ' + JSON.stringify(msg)); },
     function(e) { logErr('sendAppMessage failed', e); }
   );
+}
+
+// "YYYY-MM-DDTHH:MM" -> minutes since midnight
+function minutesOfDay(s) {
+  return +s.substr(11, 2) * 60 + +s.substr(14, 2);
 }
 
 function fetchWeather() {
@@ -28,7 +33,8 @@ function fetchWeather() {
                 '?latitude=' + lat +
                 '&longitude=' + lon +
                 '&current=temperature_2m' +
-                '&temperature_unit=fahrenheit';
+                '&temperature_unit=fahrenheit' +
+                '&daily=sunrise,sunset&timezone=auto&forecast_days=1';
       var req = new XMLHttpRequest();
       req.open('GET', url, true);
       req.timeout = REQUEST_TIMEOUT_MS;
@@ -37,7 +43,14 @@ function fetchWeather() {
           try {
             var data = JSON.parse(req.responseText);
             var t = Math.round(data.current.temperature_2m);
-            sendTemp(t);
+            var msg = { TEMP_F: t };
+            var rise = data.daily && data.daily.sunrise && data.daily.sunrise[0];
+            var set = data.daily && data.daily.sunset && data.daily.sunset[0];
+            if (rise && set) {
+              msg.SUNRISE = minutesOfDay(rise);
+              msg.SUNSET = minutesOfDay(set);
+            }
+            sendWeather(msg);
           } catch (e) { logErr('parse', e); }
         } else {
           logErr('http', req.status);

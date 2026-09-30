@@ -17,7 +17,9 @@ typedef struct {
   uint8_t  comp[3];        // left / center / right
   uint8_t  time_24h, lead_zero, track_style;
   uint8_t  saver_enabled;
+  uint8_t  daypart_mode;             // DaypartMode
   uint16_t saver_start, saver_end;   // minutes-of-day
+  uint16_t fixed_rise, fixed_set;    // minutes-of-day, used in fixed mode
 } Settings;
 
 void settings_load(void);

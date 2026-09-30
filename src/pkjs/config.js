@@ -7,7 +7,8 @@ var DEFAULTS = {
   use24: true,
   lead0: true,
   tracks: 0,                             // 0 = twin grooves, 1 = solid
-  saverOn: false, saverStart: 1320, saverEnd: 420   // battery saver 22:00-07:00
+  saverOn: false, saverStart: 1320, saverEnd: 420,  // battery saver 22:00-07:00
+  dayMode: 0, fixedRise: 420, fixedSet: 1140        // 0 = follow sun, 1 = fixed, 2 = always midday
 };
 
 function toMessage(cfg) {
@@ -16,7 +17,8 @@ function toMessage(cfg) {
     TIME_24H: cfg.use24 ? 1 : 0,
     LEAD_ZERO: cfg.lead0 ? 1 : 0,
     TRACK_STYLE: cfg.tracks,
-    SAVER_ON: cfg.saverOn ? 1 : 0, SAVER_START: cfg.saverStart, SAVER_END: cfg.saverEnd
+    SAVER_ON: cfg.saverOn ? 1 : 0, SAVER_START: cfg.saverStart, SAVER_END: cfg.saverEnd,
+    DAYPART_MODE: cfg.dayMode, SUN_FIXED_RISE: cfg.fixedRise, SUN_FIXED_SET: cfg.fixedSet
   };
 }
 
@@ -40,9 +42,14 @@ var PAGE_JS = [
 "on.onclick=function(){set(true);};off.onclick=function(){set(false);};set(!!CFG[id]);}",
 "function m2t(m){var h=Math.floor(m/60),mm=m%60;return ('0'+h).slice(-2)+':'+('0'+mm).slice(-2);}",
 "function t2m(s){var p=(s||'0:0').split(':');return (+p[0])*60+(+p[1]);}",
-"bindSel('comp1');bindSel('comp2');bindSel('comp3');bindSel('tracks');",
+"bindSel('comp1');bindSel('comp2');bindSel('comp3');bindSel('tracks');bindSel('dayMode');",
 "bindToggle('use24');bindToggle('lead0');bindToggle('saverOn');",
 "(function(){var a=document.getElementById('svStart'),b=document.getElementById('svEnd');a.value=m2t(CFG.saverStart);b.value=m2t(CFG.saverEnd);a.onchange=function(){CFG.saverStart=t2m(a.value);};b.onchange=function(){CFG.saverEnd=t2m(b.value);};})();",
+"(function(){var mode=document.getElementById('dayMode'),a=document.getElementById('fxRise'),b=document.getElementById('fxSet');" +
+"a.value=m2t(CFG.fixedRise);b.value=m2t(CFG.fixedSet);" +
+"function sync(){a.disabled=b.disabled=(CFG.dayMode!==1);}" +
+"mode.onchange=function(){CFG.dayMode=+mode.value;sync();};" +
+"a.onchange=function(){CFG.fixedRise=t2m(a.value);};b.onchange=function(){CFG.fixedSet=t2m(b.value);};sync();})();",
 "document.getElementById('save').onclick=function(){location.href='pebblejs://close#'+encodeURIComponent(JSON.stringify(CFG));};",
 "document.getElementById('cancel').onclick=function(){location.href='pebblejs://close#';};"
 ].join('\n');
@@ -73,6 +80,10 @@ function buildHtml(cfg) {
 compRow('Left slot', 'comp1') + compRow('Center slot', 'comp2') + compRow('Right slot', 'comp3') + '</section>' +
 '<section><h2>Clock</h2>' + toggleRow('24-hour', 'use24') + toggleRow('Leading zero (09:05)', 'lead0') + '</section>' +
 '<section><h2>Ski tracks</h2>' + selRow('Track style', 'tracks', ['Twin grooves', 'Solid']) + '</section>' +
+'<section><h2>Time of day</h2>' +
+selRow('Sky follows', 'dayMode', ['Follow sunrise and sunset', 'Fixed times', 'Always midday']) +
+'<div class="row"><label>Sunrise</label><input type="time" id="fxRise"></div>' +
+'<div class="row"><label>Sunset</label><input type="time" id="fxSet"></div></section>' +
 '<section><h2>Battery saver</h2>' +
 '<p style="color:var(--muted);font-size:12px;margin:0 0 4px">During this window seconds show a dash and the minute change is instant.</p>' +
 toggleRow('Enabled', 'saverOn') +
