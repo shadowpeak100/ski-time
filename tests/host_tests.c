@@ -105,11 +105,11 @@ static void test_layout_emery(void) {
   CHECK_EQ_INT(L.boxes[3].x, 99);  CHECK_EQ_INT(L.boxes[3].y, 117);
   CHECK_EQ_INT(L.chalet.x, 149); CHECK_EQ_INT(L.chalet.y, 149);
   CHECK_EQ_INT(L.chalet.w, 48);  CHECK_EQ_INT(L.chalet.h, 46);
-  CHECK_NEAR(layout_ridge_y(&L, 0), 84.0, 0.05);
-  CHECK_NEAR(layout_ridge_y(&L, 100), 38.02, 0.05);
-  CHECK_NEAR(layout_ridge_y(&L, 200), 8.0, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 0), 78.0, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 100), 41.18, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 200), 34.0, 0.05);
   CHECK_NEAR(layout_berm_y(&L, 50), 194.579, 0.05);
-  CHECK_NEAR(L.u0, -85.431, 0.1);  CHECK_NEAR(L.s0, 153.426, 0.1);
+  CHECK_NEAR(L.u0, -70.133, 0.1);  CHECK_NEAR(L.s0, 164.900, 0.1);
   CHECK_NEAR(L.u1, 176.4, 0.05);
   CHECK_NEAR(L.s_min, 0, 1e-4);    CHECK_NEAR(L.s_max, 296.8, 0.05);
 }
@@ -123,11 +123,19 @@ static void test_layout_basalt(void) {
   CHECK_EQ_INT(L.boxes[2].y, 87); CHECK_EQ_INT(L.boxes[3].y, 87); CHECK_EQ_INT(L.boxes[3].x, 71);
   CHECK_EQ_INT(L.chalet.x, 107); CHECK_EQ_INT(L.chalet.y, 110);
   CHECK_EQ_INT(L.chalet.w, 35);  CHECK_EQ_INT(L.chalet.h, 33);
-  CHECK_NEAR(layout_ridge_y(&L, 0), 62.0, 0.05);
-  CHECK_NEAR(layout_ridge_y(&L, 72), 28.12, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 0), 57.0, 0.05);
+  CHECK_NEAR(layout_ridge_y(&L, 72), 30.08, 0.05);
   CHECK_NEAR(layout_berm_y(&L, 50), 142.697, 0.05);
-  CHECK_NEAR(L.u0, -61.228, 0.1); CHECK_NEAR(L.u1, 130.32, 0.05);
+  CHECK_NEAR(L.u0, -50.126, 0.1); CHECK_NEAR(L.u1, 130.32, 0.05);
   CHECK_NEAR(L.s_max, 216.0, 0.05);
+}
+
+static void test_ridge_clears_hour_row(void) {
+  const int dims[2][2] = { {200, 228}, {144, 168} };
+  for (int d = 0; d < 2; d++) {
+    Layout L; layout_init(&L, dims[d][0], dims[d][1]);
+    for (int x = L.boxes[0].x - 4; x <= L.boxes[1].x + L.gw + 4; x++) CHECK(layout_ridge_y(&L, x) + 6 <= L.boxes[0].y);
+  }
 }
 
 static void test_layout_glyph_point(void) {
@@ -341,6 +349,7 @@ static void test_flood_coverage(void) {
       }
     }
   printf("flood coverage %ld/%ld\n", lit, all);
+  for (int i = 0; i < FLOOD_COUNT; i++) CHECK(fh[i].by >= layout_ridge_y(&L, fh[i].bx) + 4);   // pole stands on the slope
   CHECK(lit * 100 >= all * 95);
   CHECK(flood_at(fh, 1, L.k, fh[0].hx - fh[0].dx * 20, fh[0].hy - fh[0].dy * 20) == 0);   // behind lamp 0
   CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0); // past the end of its cone
@@ -354,6 +363,7 @@ static void test_slope_trees_clear(void) {
     const SlopeTree *tr = &SLOPE_TREES[t];
     int hw = (tr->h * 42 + 99) / 100, x0 = tr->x - hw, x1 = tr->x + hw + 2, y0 = tr->base - tr->h, y1 = tr->base + 1;
     CHECK(y1 < L.comp_top - 3);
+    CHECK(tr->base - tr->h >= layout_ridge_y(&L, tr->x) + 6);
     CHECK(!(x1 >= L.chalet.x - 22 && y1 >= L.chalet.y - 14));
     for (int b = 0; b < 4; b++) CHECK(x1 < L.boxes[b].x - 4 || x0 > L.boxes[b].x + L.gw + 4 ||
                                       y1 < L.boxes[b].y || y0 > L.boxes[b].y + L.gh);
@@ -386,6 +396,7 @@ int main(void) {
   test_time_slots();
   test_layout_emery();
   test_layout_basalt();
+  test_ridge_clears_hour_row();
   test_layout_glyph_point();
   test_skiers_2046();
   test_skiers_all_minutes();

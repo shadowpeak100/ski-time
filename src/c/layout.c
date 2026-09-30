@@ -26,7 +26,7 @@ void layout_init(Layout *L, int W, int H) {
   float k = L->k = W / 200.0f;
   L->comp_h = rnd(H * 0.14f);
   L->comp_top = H - L->comp_h;
-  L->y_l = rnd(H * 0.37f); L->y_r = rnd(H * 0.035f); L->bulge = H * 0.035f;
+  L->y_l = (H * 34 + 50) / 100; L->y_r = (H * 15 + 50) / 100; L->bulge = H * 13 / 200.0f;
   L->gw = rnd(W * 0.21f); L->gh = rnd(L->gw * 1.2f);
   int16_t gx = rnd(W * 0.035f), gy = rnd(H * 0.028f);
   int16_t row1 = rnd(H / 2.0f - (2 * L->gh + gy) / 2.0f), row2 = row1 + L->gh + gy;   // block centred on the screen

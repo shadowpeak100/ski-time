@@ -277,7 +277,7 @@ function climbOf(ch){const p=dense(ch,(x,y)=>({x,y}),60);let lo=-1e9,c=0;for(con
 function makeLayout(pid,side,track,theme,moon){
   const {w:W,h:H}=PLATFORMS[pid],k=W/200;
   const compH=Math.round(H*.14),compTop=H-compH;
-  const yL=Math.round(H*.37),yR=Math.round(H*.035),bulge=H*.035;
+  const yL=Math.round(H*.34),yR=Math.round(H*.15),bulge=H*.065;
   const ridgeY=x=>yL+(yR-yL)*(x/W)-Math.sin(Math.PI*clamp(x/W,0,1))*bulge;
   const bermY=x=>compTop-1+Math.sin(x*.07)*1.2*k;
   const gw=Math.round(W*.21),gh=Math.round(gw*1.2),gx=Math.round(W*.035),gy=Math.round(H*.028);

@@ -73,6 +73,7 @@ Exact values per phase are copied from the prototype's `THEMES` (hex values in 6
 
 ## 4. Scene elements
 
+- **Ridge:** left end `round(0.34H)`, right end `round(0.15H)`, bulge `0.065H` (a lower hillside, so more sky shows across the top right). The ridge stays at least 6 px above the hour row. Slope trees stand at least 6 px below the ridge and poles at least 4 px below it.
 - **Sky:** the dithered stops use `t = clamp(y/(ridgeY(0)*0.92))^1.2 × (stops−1)`. At each pixel choose stop `i` or `i+1` with Bayer threshold `t−i`.
 - **Sun:** a disc plus a dithered halo, as in phase 1, but with the theme's position, radius and colours. The sunrise and sunset suns are drawn before the peaks, so the peaks can overlap them.
 - **Moon:** a disc of radius r, lit by the real phase `p` (0 = new, 0.5 = full):
