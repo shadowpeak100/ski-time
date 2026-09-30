@@ -136,7 +136,7 @@ The message keys are `DAYPART_MODE` (0 = follow, 1 = fixed, 2 = always day), `SU
 
 - Weather (phase 3).
 - Gradual blending inside a window.
-- Slope trees on Basalt. Basalt gets the themes, moon, stars, glow, floodlights and campfire.
+- Night extras and slope trees on Basalt. To save memory they are compiled out there (Emery only): window glow, floodlights, campfire and slope trees. Basalt keeps the themes, moon and stars.
 
 ## 8. Testing
 
