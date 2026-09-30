@@ -224,8 +224,9 @@ static void inbox_received(DictionaryIterator *it, void *ctx) {
   if (rise || set) {   // takes effect at the next minute change
     if (rise && rise->value->int32 >= 0 && rise->value->int32 < 1440) s_sun_rise = (uint16_t)rise->value->int32;
     if (set && set->value->int32 >= 0 && set->value->int32 < 1440) s_sun_set = (uint16_t)set->value->int32;
-    uint16_t sun[2] = { s_sun_rise, s_sun_set };
-    persist_write_data(PERSIST_KEY_SUN, sun, sizeof(sun));
+    uint16_t sun[2] = { s_sun_rise, s_sun_set }, saved[2] = { 0, 0 };
+    if (persist_read_data(PERSIST_KEY_SUN, saved, sizeof(saved)) != (int)sizeof(saved) || saved[0] != sun[0] || saved[1] != sun[1])
+      persist_write_data(PERSIST_KEY_SUN, sun, sizeof(sun));
   }
   if (settings_apply_message(it)) {
     s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
