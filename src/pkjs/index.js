@@ -47,8 +47,11 @@ function fetchWeather() {
             var rise = data.daily && data.daily.sunrise && data.daily.sunrise[0];
             var set = data.daily && data.daily.sunset && data.daily.sunset[0];
             if (rise && set) {
-              msg.SUNRISE = minutesOfDay(rise);
-              msg.SUNSET = minutesOfDay(set);
+              var sr = minutesOfDay(rise), ss = minutesOfDay(set);
+              if (isFinite(sr) && isFinite(ss) && sr >= 0 && sr < 1440 && ss >= 0 && ss < 1440) {
+                msg.SUNRISE = sr;
+                msg.SUNSET = ss;
+              }
             }
             sendWeather(msg);
           } catch (e) { logErr('parse', e); }

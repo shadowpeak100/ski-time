@@ -219,8 +219,8 @@ static void inbox_received(DictionaryIterator *it, void *ctx) {
   }
   Tuple *rise = dict_find(it, MESSAGE_KEY_SUNRISE), *set = dict_find(it, MESSAGE_KEY_SUNSET);
   if (rise || set) {   // takes effect at the next minute change
-    if (rise) s_sun_rise = (uint16_t)rise->value->int32;
-    if (set) s_sun_set = (uint16_t)set->value->int32;
+    if (rise && rise->value->int32 >= 0 && rise->value->int32 < 1440) s_sun_rise = (uint16_t)rise->value->int32;
+    if (set && set->value->int32 >= 0 && set->value->int32 < 1440) s_sun_set = (uint16_t)set->value->int32;
     uint16_t sun[2] = { s_sun_rise, s_sun_set };
     persist_write_data(PERSIST_KEY_SUN, sun, sizeof(sun));
   }
@@ -310,7 +310,7 @@ static void init(void) {
   }
   update_health();
   app_message_register_inbox_received(inbox_received);
-  app_message_open(128, 16);
+  app_message_open(160, 16);
 }
 
 int main(void) {
