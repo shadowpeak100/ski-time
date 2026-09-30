@@ -315,6 +315,68 @@ static void test_moon_phase(void) {
   CHECK_NEAR(q, 0.25, 0.04);
 }
 
+#include "theme.h"
+#include "flood.h"
+#include "decor.h"
+static void test_theme_palette_budget(void) {
+  Col8 buf[32];
+  for (int d = 0; d < 4; d++) CHECK(theme_bg_palette(theme_for((Daypart)d), buf) <= 16);
+  CHECK(theme_for(DAY_MIDDAY)->sky[0] == C8(0x55AAFF));   // phase 1 look preserved
+  CHECK(theme_for(DAY_NIGHT)->night && theme_for(DAY_NIGHT)->body.kind == BODY_MOON);
+  CHECK_EQ_INT(C8(0xFFFFFF), 0xFF); CHECK_EQ_INT(C8(0x000000), 0xC0); CHECK_EQ_INT(C8(0x55AAFF), 0xDB);
+}
+static void test_flood_coverage(void) {
+  Layout L; layout_init(&L, 200, 228);
+  FloodHead fh[FLOOD_COUNT]; flood_heads(200, 228, L.k, fh);
+  long all = 0, lit = 0;
+  for (uint8_t slot = 0; slot < 4; slot++) for (uint8_t d = 0; d < 10; d++)
+    for (uint8_t j = 0; j < glyph_stroke_count(d); j++) {
+      GlyphStroke g = glyph_stroke(d, j);
+      for (int i = 2; i + 5 < g.n; i += 6) for (int s = 0; s <= 8; s++) {   // control-polygon sample is enough
+        float t = s / 8.0f, m = 1 - t;
+        float u = m*m*m*g.pts[i-2] + 3*m*m*t*g.pts[i] + 3*m*t*t*g.pts[i+2] + t*t*t*g.pts[i+4];
+        float v = m*m*m*g.pts[i-1] + 3*m*m*t*g.pts[i+1] + 3*m*t*t*g.pts[i+3] + t*t*t*g.pts[i+5];
+        Vec2 p = layout_glyph_point(&L, slot, u, v);
+        all++; if (flood_at(fh, FLOOD_COUNT, L.k, p.x, p.y) > 0.35f) lit++;
+      }
+    }
+  printf("flood coverage %ld/%ld\n", lit, all);
+  CHECK(lit * 100 >= all * 95);
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx - fh[0].dx * 20, fh[0].hy - fh[0].dy * 20) == 0);   // behind lamp 0
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0); // past the end of its cone
+  CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 60, fh[0].hy + fh[0].dy * 60) > 0.5f); // bright along its axis
+}
+static void test_slope_trees_clear(void) {
+  Layout L; layout_init(&L, 200, 228);
+  static SkPt pool[2000];
+  const bool fm[4][2] = { {true,true}, {true,false}, {false,true}, {false,false} };
+  for (int t = 0; t < SLOPE_TREE_COUNT; t++) {                  // static obstacles
+    const SlopeTree *tr = &SLOPE_TREES[t];
+    int hw = (tr->h * 42 + 99) / 100, x0 = tr->x - hw, x1 = tr->x + hw + 2, y0 = tr->base - tr->h, y1 = tr->base + 1;
+    CHECK(y1 < L.comp_top - 3);
+    CHECK(!(x1 >= L.chalet.x - 22 && y1 >= L.chalet.y - 14));
+    for (int b = 0; b < 4; b++) CHECK(x1 < L.boxes[b].x - 4 || x0 > L.boxes[b].x + L.gw + 4 ||
+                                      y1 < L.boxes[b].y || y0 > L.boxes[b].y + L.gh);
+    (void)x0;
+  }
+  for (int c = 0; c < 4; c++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {
+    DigitSlot s[4]; uint8_t n = time_slots(h, m, fm[c][0], fm[c][1], s);
+    SkierSet set; skiers_init(&set, pool, SKI_POOL_CAP(200)); skiers_build(&set, &L, s, n);
+    for (uint8_t i = 0; i < set.count; i++) {
+      const Skier *sk = &set.sk[i];
+      for (int t = 0; t < SLOPE_TREE_COUNT; t++) {
+        const SlopeTree *tr = &SLOPE_TREES[t];
+        int hw = (tr->h * 42 + 99) / 100;
+        float x0 = tr->x - hw - 5, x1 = tr->x + hw + 2 + 5, y0 = tr->base - tr->h - 5, y1 = tr->base + 1 + 5;
+        for (uint16_t p = 0; p < sk->n; p += 2) { float x = sk->pts[p].x / 16.0f, y = sk->pts[p].y / 16.0f;
+          CHECK(!(x >= x0 && x <= x1 && y >= y0 && y <= y1)); }
+        for (uint16_t tt = 0; tt <= 1500; tt += 30) { SkierState e = skier_exit_state(sk, i, tt, L.k);
+          if (e.visible) { float x = e.x / 16.0f, y = e.y / 16.0f; CHECK(!(x >= x0 && x <= x1 && y >= y0 && y <= y1)); } }
+      }
+    }
+  }
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -337,6 +399,9 @@ int main(void) {
   test_daypart_windows();
   test_daypart_modes();
   test_moon_phase();
+  test_theme_palette_budget();
+  test_flood_coverage();
+  test_slope_trees_clear();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
