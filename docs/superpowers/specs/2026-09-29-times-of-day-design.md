@@ -103,9 +103,9 @@ Exact values per phase are copied from the prototype's `THEMES` (hex values in 6
   - three flame tongues in red, orange, chrome yellow and a yellow core, plus sparks
   - it animates from the same continuous phase clock as the smoke, so it moves only while the face redraws
 - **Slope trees (Emery only, every phase):** 9 pines, each given as (x, base, height) and drawn back to front, each with a `snowShade` ellipse shadow `(x+2, base, 0.42h × 1.6)`:
-  - (54, 80, 16), (41, 86, 16), (30, 100, 16), (24, 109, 9)
+  - (50, 80, 16), (41, 86, 16), (30, 100, 16), (24, 109, 9)
   - (180, 132, 10)
-  - (46, 190, 8), (70, 190, 9), (100, 188, 10), (114, 189, 12)
+  - (40, 95, 8), (83, 191, 7), (100, 190, 8), (114, 190, 10)
   - A host test pins that no skier path, stop or ski-out point, over every minute and all 4 clock formats, comes within 5 px of any tree's rectangle including its shadow. It also checks the trees stay clear of the digit boxes, chalet, strip and poles.
 
 ## 5. Data from the phone
