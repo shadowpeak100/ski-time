@@ -1,0 +1,687 @@
+<title>Ski Time Weather</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Roboto+Condensed:wght@700&display=swap">
+<style>
+/* Layout: live watch + weather/time pickers, then the full weather × time-of-day grid, the forecast mapping, and decisions. */
+:root{
+  --bg:#EDF2F6; --surface:#FFFFFF; --ink:#132033; --muted:#56657A; --line:#D2DBE4;
+  --accent:#1F5FB8; --bezel:#1A1D23; --bezel-hi:#2C313A;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0C131D; --surface:#131D2A; --ink:#E4ECF4; --muted:#93A3B6; --line:#243244; --accent:#5B9BFF; --bezel:#05070A; --bezel-hi:#1B2029; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0C131D; --surface:#131D2A; --ink:#E4ECF4; --muted:#93A3B6; --line:#243244; --accent:#5B9BFF; --bezel:#05070A; --bezel-hi:#1B2029; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);padding:0 16px}
+.wrap{max-width:1160px;margin:0 auto;padding-block:28px 64px;display:flex;flex-direction:column;gap:48px}
+h1,h2,h3{font-family:var(--display);font-weight:800;text-transform:uppercase;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+h1{font-size:clamp(48px,7.5vw,92px)} h2{font-size:clamp(28px,3.6vw,38px)} h3{font-size:18px}
+p{margin:0}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.lede{max-width:66ch;color:var(--muted);font-size:17px}
+.head{display:flex;flex-direction:column;gap:12px}
+.hero{display:grid;grid-template-columns:minmax(0,468px) minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:900px){.hero{grid-template-columns:minmax(0,1fr)}}
+.stage{display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0}
+.watch{width:100%;background:linear-gradient(160deg,var(--bezel-hi),var(--bezel) 55%);border-radius:44px;padding:44px 34px;box-shadow:0 30px 60px -30px rgba(10,20,40,.55)}
+.watch canvas{display:block;width:100%;height:auto;aspect-ratio:200/228;image-rendering:pixelated;border-radius:3px}
+.cap{font:400 12px/1.4 var(--mono);color:var(--muted);text-align:center}
+.panel{display:flex;flex-direction:column;gap:22px;min-width:0}
+.readout{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:10px;flex-wrap:wrap}
+.readout .ph{font:800 36px/1 var(--display);text-transform:uppercase}
+.readout .code{font:500 13px var(--mono);color:var(--muted)}
+.group{display:flex;flex-direction:column;gap:8px}
+.group .t{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button,.row button{font:600 13px var(--body);border:1.5px solid var(--ink);background:transparent;color:var(--ink);padding:7px 12px;border-radius:3px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row button.primary{background:var(--ink);color:var(--surface)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.notes{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);font-size:14px;max-width:62ch}
+.notes b{color:var(--ink)}
+.grid{overflow-x:auto}
+.grid table{border-collapse:separate;border-spacing:10px;min-width:720px;width:100%}
+.grid th{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;vertical-align:middle;white-space:nowrap}
+.grid td{padding:0;width:22%}
+.grid td button{display:block;width:100%;padding:0;border:0;background:none;cursor:pointer}
+.grid canvas{display:block;width:100%;height:auto;aspect-ratio:200/228;image-rendering:pixelated;border:5px solid var(--bezel);border-radius:5px;background:var(--bezel)}
+.grid td button[aria-pressed="true"] canvas{border-color:var(--accent)}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.map div{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.map b{font:800 17px/1.1 var(--display);text-transform:uppercase}
+.map code{font:500 12px var(--mono);color:var(--accent)}
+.map p{font-size:13.5px;color:var(--muted)}
+.decisions{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;list-style:none;padding:0;margin:0}
+.decisions li{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.decisions b{font:800 19px/1.1 var(--display);text-transform:uppercase}
+.decisions p{color:var(--muted);font-size:14px}
+.decisions em{font-style:normal;color:var(--ink);font-weight:600}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <p class="eyebrow">Ski Time · phase 3 design</p>
+    <h1>Weather</h1>
+    <p class="lede">The sky shows the current weather from the forecast the watch already uses for temperature. Every weather layer takes its colours from the time of day, so a cloud at sunset glows orange and a cloud at night is a dark blue shape. Pick any weather and time below, or tap a cell in the grid.</p>
+  </header>
+
+  <section class="hero" aria-label="Live preview">
+    <div class="stage">
+      <div class="watch"><canvas id="face" width="600" height="684" aria-label="Watch face preview"></canvas></div>
+      <p class="cap">Emery · 200×228 at 3× · Pebble 64-colour palette</p>
+    </div>
+    <div class="panel">
+      <div class="readout"><span class="ph" id="ph">Rain · Midday</span><span class="code" id="code">WMO 61–67, 80–82</span></div>
+      <div class="group"><span class="t">Weather</span><div class="chips" id="wx"></div></div>
+      <div class="group"><span class="t">Time of day</span><div class="chips" id="tod"></div></div>
+      <div class="row"><button class="primary" id="btn-next">Play a minute change</button></div>
+      <div class="notes">
+        <p><b>Clouds, overcast and fog</b> are baked into the stored background, like the mountains, so they cost nothing per frame. Cloud cover hides the sun, moon and stars.</p>
+        <p><b>Rain, snow and lightning</b> are drawn over the scene each frame, after the skiers and trees. They never fall into the complication strip.</p>
+        <p><b>Fog</b> is thick over the peaks and thins down the slope, so the time stays readable.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head" style="margin-bottom:12px"><p class="eyebrow">All combinations</p><h2>Weather × time of day</h2></div>
+    <div class="grid"><table id="grid" aria-label="Weather by time of day"></table></div>
+    <p class="lede" style="font-size:14px;margin-top:8px">Every combination fits the watch's 16-colour background. The most any of them needs is 14.</p>
+  </section>
+
+  <section>
+    <div class="head" style="margin-bottom:14px"><p class="eyebrow">From the forecast</p><h2>What each code shows</h2></div>
+    <div class="map">
+      <div><b>Clear</b><code>WMO 0</code><p>Today's sky: sun or moon and stars.</p></div>
+      <div><b>Partly cloudy</b><code>WMO 1–2</code><p>Flat, fluffy clouds: soft bumps on top and a flat base, sitting behind the peaks. The sun still shows.</p></div>
+      <div><b>Overcast</b><code>WMO 3</code><p>A two-layer cloud deck and a flatter sky. No sun, moon or stars.</p></div>
+      <div><b>Fog</b><code>WMO 45–48</code><p>Cloud deck plus a haze that swallows the peaks and fades out above the digits.</p></div>
+      <div><b>Drizzle</b><code>WMO 51–57</code><p>Light, short streaks under an overcast sky. Freezing drizzle looks the same.</p></div>
+      <div><b>Rain</b><code>WMO 61–67, 80–82</code><p>Longer, faster streaks slanting with the wind. Showers and freezing rain are included.</p></div>
+      <div><b>Snow</b><code>WMO 71–77, 85–86</code><p>Drifting flakes, some two pixels wide, each with a tiny shadow so they show against the snow.</p></div>
+      <div><b>Thunderstorm</b><code>WMO 95–99</code><p>Dark storm clouds, heavy rain, and one lightning bolt between the two big peaks on the left. It flashes every 5 seconds as a double flicker, with a flash of the sky. Hail is included.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head" style="margin-bottom:18px"><p class="eyebrow">For your review</p><h2>Decisions</h2></div>
+    <ol class="decisions">
+      <li><b>Rain and snow at rest</b><p>Falling rain means redrawing the watch many times a second, which costs battery. I propose it falls <em>while the face is already redrawing</em>, during a minute change and every second with the seconds complication. The rest of the time it holds still, the way the campfire does.</p></li>
+      <li><b>Lightning</b><p>A bolt and a flash roughly every 6 seconds while the face is animating, and at least once at every minute change during a storm.</p></li>
+      <li><b>Wind</b><p>The forecast also gives wind direction. I propose rain and snow slant with the wind, left or right. The preview slants left.</p></li>
+      <li><b>Basalt</b><p>Basalt has almost no memory left. I propose weather runs on Emery only, like the floodlights and trees.</p></li>
+      <li><b>Setting</b><p>A <em>Show weather</em> switch in settings, on by default. When it's off, the sky always shows clear.</p></li>
+      <li><b>How often</b><p>The weather refreshes with the temperature, every 30 minutes, and a new sky arrives with the next minute change.</p></li>
+    </ol>
+  </section>
+</div>
+<script>
+(()=>{'use strict';
+/* ---------- palette (Pebble GColor) ---------- */
+const C={white:'#FFFFFF',celeste:'#AAFFFF',babyBlue:'#AAAAFF',picton:'#55AAFF',liberty:'#5555AA',cobalt:'#0055AA',
+  oxford:'#000055',darkGray:'#555555',lightGray:'#AAAAAA',darkGreen:'#005500',midnightGreen:'#005555',cadet:'#55AAAA',
+  icterine:'#FFFF55',pastelYellow:'#FFFFAA',chrome:'#FFAA00',windsor:'#AA5500',bulgarian:'#550000',red:'#FF0000'};
+const SWATCHES=[['White','white','Snow'],['Celeste','celeste','Snow shade, lower sky'],['BabyBlueEyes','babyBlue','Far peaks, powder shadow'],
+  ['PictonBlue','picton','Upper sky'],['Liberty','liberty','Far shade, text, crack'],['CobaltBlue','cobalt','Near peaks'],['OxfordBlue','oxford','Near shade, skis'],
+  ['DarkGray','darkGray','Ski tracks'],['LightGray','lightGray','Chimney smoke'],['DarkGreen','darkGreen','Pines, sun side'],['MidnightGreen','midnightGreen','Pines, shade side'],
+  ['CadetBlue','cadet','Distant forest'],['Icterine','icterine','Sun, window glow'],['PastelYellow','pastelYellow','Sun halo'],['ChromeYellow','chrome','Windows'],
+  ['WindsorTan','windsor','Chalet timber'],['BulgarianRose','bulgarian','Beams, trunks, door']];
+/* A time of day is a table of colour roles plus optional layers (stars, moon, campfire, window glow).
+   Weather (phase 3) adds more layers that read their colours from the same table, e.g. cloud lit/shade. */
+const THEMES={
+  sunrise:{name:'Sunrise',sky:['#AAAAFF','#FFAAFF','#FFFFAA'],body:{kind:'sun',x:.1,y:.25,r:8,halo:10,core:'#FFFF55',glow:'#FFFFAA'},
+    far:['#FFAAFF','#AA55AA','#FFFFAA','#FFAAFF'],near:['#AA55AA','#550055','#FFAAAA','#FFAAFF'],forest:'#5555AA',
+    pineLit:'#005500',pineShade:'#005555',pineSnow:'#FFAAFF',snow:'#FFFFFF',snowShade:'#FFAAFF',snowShadow:'#AAAAFF',powder:'#FFFFFF',
+    text:'#AA55AA',cloud:['#FFFFAA','#FFAAFF','#AA55AA']},
+  day:{name:'Midday',sky:['#55AAFF','#AAFFFF'],body:{kind:'sun',x:.13,y:.08,r:7,halo:6,core:'#FFFF55',glow:'#FFFFAA'},
+    far:['#AAAAFF','#5555AA','#FFFFFF','#AAFFFF'],near:['#0055AA','#000055','#FFFFFF','#AAAAFF'],forest:'#55AAAA',
+    pineLit:'#005500',pineShade:'#005555',pineSnow:'#FFFFFF',snow:'#FFFFFF',snowShade:'#AAFFFF',snowShadow:'#AAAAFF',powder:'#FFFFFF',
+    text:'#5555AA',cloud:['#FFFFFF','#AAFFFF','#AAAAFF']},
+  sunset:{name:'Sunset',sky:['#AA0055','#FF0000','#FF5500','#FFAA00'],body:{kind:'sun',x:.3,y:.2,r:10,halo:8,core:'#FFFF55',glow:'#FFAA00'},
+    far:['#FFAA55','#AA55AA','#FFFFAA','#FFAAAA'],near:['#AA0055','#550055','#FFAA55','#FFAAAA'],forest:'#550055',
+    pineLit:'#005500',pineShade:'#000000',pineSnow:'#FFAAAA',snow:'#FFFFFF',snowShade:'#FFAAAA',snowShadow:'#FFAAFF',powder:'#FFFFFF',
+    text:'#AA0055',cloud:['#FFAA55','#FF5500','#AA0055']},
+  night:{name:'Night',sky:['#000000','#000000','#000055'],body:{kind:'moon',x:.15,y:.1,r:6},stars:true,night:true,
+    far:['#5555AA','#000055','#AAAAFF','#5555AA'],near:['#000055','#000000','#5555AA','#000055'],forest:'#000055',
+    pineLit:'#005555',pineShade:'#000000',pineSnow:'#AAAAFF',snow:'#AAAAFF',snowShade:'#5555AA',snowShadow:'#5555AA',powder:'#FFFFFF',
+    text:'#000055',cloud:['#5555AA','#AAAAFF','#000055']}};
+let TH=THEMES.day;
+/* Weather (phase 3). Each weather is a set of layers; every colour comes from the active time of day,
+   so one layer set works in all four phases. Codes are the WMO codes the forecast reports. */
+const WEATHER={
+  clear:{name:'Clear',codes:'0',clouds:0},
+  partly:{name:'Partly cloudy',codes:'1–2',clouds:3},
+  overcast:{name:'Overcast',codes:'3',deck:true,sky:'overcast'},
+  fog:{name:'Fog',codes:'45–48',deck:true,sky:'overcast',fog:.85},
+  drizzle:{name:'Drizzle',codes:'51–57',deck:true,sky:'overcast',precip:'rain',rate:32,len:2,speed:110},
+  rain:{name:'Rain',codes:'61–67, 80–82',deck:true,sky:'overcast',precip:'rain',rate:70,len:4,speed:190},
+  snow:{name:'Snow',codes:'71–77, 85–86',deck:true,sky:'overcast',precip:'snow',rate:95,speed:26},
+  storm:{name:'Thunderstorm',codes:'95–99',deck:true,sky:'storm',precip:'rain',rate:90,len:5,speed:230,lightning:true}};
+/* Sky stops that replace the clear sky for each time of day. */
+const WX_SKY={
+  sunrise:{overcast:['#AAAAAA','#FFAAFF'],storm:['#555555','#AA55AA']},
+  day:{overcast:['#AAAAAA','#FFFFFF'],storm:['#555555','#AAAAAA']},
+  sunset:{overcast:['#555555','#AA5555','#FFAA55'],storm:['#000000','#550000','#AA5555']},
+  night:{overcast:['#000000','#000055'],storm:['#000000','#555555']}};
+/* Dark storm clouds per time of day (lit, mid, shade), so lightning stands out. */
+const WX_STORM_CLOUD={sunrise:['#AA55AA','#550055','#550055'],day:['#AAAAAA','#555555','#555555'],sunset:['#AA5555','#550000','#550000'],night:['#555555','#000055','#000055']};
+/* Rain colour and fog colour per time of day. */
+const WX_ROLE={sunrise:{rain:'#AA55AA',fog:'#FFAAFF'},day:{rain:'#5555AA',fog:'#FFFFFF'},sunset:{rain:'#550055',fog:'#FFAAAA'},night:{rain:'#AAAAFF',fog:'#555555'}};
+function phaseKey(th){return th===THEMES.sunrise?'sunrise':th===THEMES.sunset?'sunset':th===THEMES.night?'night':'day'}
+/* Partly-cloudy clouds: fluffy bumps along the top, but wide and low with a flat base. */
+function drawFlatCloud(g,x,y,[lit,mid,shade],s){
+  const bumps=[[-20,1,6,4],[-10,-1,8,5],[1,-2,9,6],[12,-1,8,5],[22,1,6,4]];
+  const el=(cx,cy,rx,ry)=>{g.beginPath();g.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);g.fill()};
+  const base=(dy,h)=>{g.beginPath();g.ellipse(x+1*s,y+dy*s,28*s,h*s,0,0,Math.PI*2);g.fill()};
+  g.fillStyle=shade;bumps.forEach(([dx,dy,rx,ry])=>el(x+dx*s+1,y+dy*s+1.5,rx*s,ry*s));base(4,3.2);
+  g.fillStyle=mid;bumps.forEach(([dx,dy,rx,ry])=>el(x+dx*s,y+dy*s+.6,rx*s*.96,ry*s*.95));base(3,2.4);
+  g.fillStyle=lit;bumps.forEach(([dx,dy,rx,ry])=>el(x+dx*s-.8,y+dy*s-.8,rx*s*.82,ry*s*.75))}
+function drawCloud(g,x,y,[lit,mid,shade],s){
+  const puffs=[[-14,4,7],[-6,-2,9],[5,-4,10],[15,1,8],[22,5,6],[0,6,9],[-18,7,5]];
+  g.fillStyle=shade;puffs.forEach(([dx,dy,r])=>{g.beginPath();g.arc(x+dx*s+1,y+dy*s+2,r*s,0,7);g.fill()});
+  g.fillStyle=mid;puffs.forEach(([dx,dy,r])=>{g.beginPath();g.arc(x+dx*s,y+dy*s+.8,r*s*.96,0,7);g.fill()});
+  g.fillStyle=lit;puffs.forEach(([dx,dy,r])=>{g.beginPath();g.arc(x+dx*s-.8,y+dy*s-.8,r*s*.8,0,7);g.fill()})}
+/* Pines standing on the open slope (Emery), drawn over the skiers. No skier path, stop or ski-out touches a tree's
+   base in any minute or clock format; trees stay outside each digit row's block, the chalet, smoke, poles and strip. */
+const SLOPE_TREES=[[130,41,9],[136,41,8],[123,42,15],[109,44,9],[118,45,11],[50,62,12],[44,64,8],[39,65,14],[54,67,9],[37,71,8],[21,73,10],[15,76,13],[9,78,11],[23,79,10],[50,80,16],[41,86,16],[46,99,8],[30,100,16],[38,104,9],[183,114,7],[181,120,11],[175,121,7],[151,128,8],[157,128,10],[152,133,14],[159,133,11],[38,151,11],[32,153,12],[26,154,8],[107,181,11],[117,182,9],[54,184,8],[99,184,7],[64,187,7],[106,187,9],[113,187,13],[46,188,9],[9,189,8],[22,189,7],[120,189,8],[39,190,9],[51,190,11],[16,191,7],[58,191,7]];
+/* Night floodlights: tall poles at the edges of the run, aimed across it at the digits.
+   Each lights a cone of snow that fades with distance and toward its edges. */
+const FLOODS=[{base:[.95,.30],aim:[.40,.36]},{base:[.97,.50],aim:[.38,.53]},{base:[.965,.64],aim:[.40,.70]},
+  {base:[.07,.45],aim:[.62,.36]},{base:[.05,.76],aim:[.62,.62]}];
+const FLOOD_LEN=215,FLOOD_HALF=24*Math.PI/180,FLOOD_POLE=16;
+function floodHeads(W,H,k){return FLOODS.map(f=>{const bx=f.base[0]*W,by=f.base[1]*H,hx=bx,hy=by-FLOOD_POLE*k;
+  const d=norm(f.aim[0]*W-hx,f.aim[1]*H-hy);return{bx,by,hx,hy,d}})}
+function floodAt(x,y,heads,k){let I=0;const cosH=Math.cos(FLOOD_HALF),len=FLOOD_LEN*k;
+  for(const f of heads){const vx=x+.5-f.hx,vy=y+.5-f.hy,dd=Math.hypot(vx,vy);if(dd>len||dd<1)continue;
+    const c=(vx*f.d.x+vy*f.d.y)/dd;if(c<=cosH)continue;
+    const edge=smooth(clamp((c-cosH)/(1-cosH)*2.2,0,1)),fall=Math.pow(1-dd/len,.85),start=smooth(clamp((dd-4*k)/(12*k),0,1));
+    I=Math.max(I,edge*fall*start)}return I}
+const C0={};
+function useTheme(th){TH=th;if(!C0.white)Object.assign(C0,{white:C.white,celeste:C.celeste,babyBlue:C.babyBlue,liberty:C.liberty});
+  C.white=th.powder;C.celeste=th.snowShade;C.babyBlue=th.snowShadow}
+function moonPhase(date){const syn=29.530588853,ref=Date.UTC(2000,0,6,18,14);const d=(date-ref)/864e5/syn;return d-Math.floor(d)}
+const JACKETS=['#FF0000','#FFAA00','#0055FF','#AA00FF','#FF5500','#00AAFF','#FF0055','#00AA55'];
+const PLATFORMS={emery:{w:200,h:228,z:3,label:'Emery · 200×228'},basalt:{w:144,h:168,z:3,label:'Basalt · 144×168'}};
+
+/* ---------- geometry helpers ---------- */
+const norm=(x,y)=>{const l=Math.hypot(x,y)||1;return{x:x/l,y:y/l}};
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t), easeOut=t=>1-(1-t)*(1-t);
+const hash=n=>{const s=Math.sin(n*127.1+311.7)*43758.5453;return s-Math.floor(s)};
+const noise=x=>clamp(.5+.3*Math.sin(x)+.2*Math.sin(x*2.3+1.7),0,1);
+const F=norm(-.6,.8);            /* fall line: down and to the left */
+const D={x:-F.y,y:F.x};          /* across the slope */
+if(D.x<0){D.x=-D.x;D.y=-D.y}
+const REST=norm(.92,.39);        /* hockey-stop ski direction */
+const T={crack:.55,flowStart:.7,flowEnd:1.65,exitEnd:.95,drawStart:1.45,stagger:.2,pair:.15,stop:.3};
+const SLANT=.16;
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+const bayer=(x,y)=>(BAYER[(y&3)*4+(x&3)]+.5)/16;
+
+/* ---------- glyphs: cubic chains in a unit box (x right, y down) ---------- */
+const GLYPHS={
+ 0:[[.50,.02, .15,.02,.02,.55,.22,.86, .36,1.06,.66,1.00,.88,.93],
+    [.56,.02, .92,.04,1.00,.55,.78,.86, .64,1.06,.34,1.00,.12,.93]],
+ 1:[[.84,.02, .72,.02,.64,.12,.60,.30, .55,.55,.50,.78,.46,.90, .42,1.00,.32,1.02,.22,.96]],
+ 2:[[.16,.20, .20,.03,.46,-.02,.64,.04, .86,.12,.86,.36,.66,.52, .46,.68,.24,.80,.14,.90, .06,.98,.14,1.04,.30,.96, .44,.90,.62,.98,.92,.96]],
+ 3:[[.18,.12, .30,-.02,.72,-.04,.76,.16, .80,.34,.60,.44,.42,.46, .34,.47,.34,.52,.46,.50, .70,.48,.88,.60,.84,.76, .80,.96,.46,1.04,.10,.88]],
+ 4:[[.54,.00, .40,.22,.22,.44,.10,.58, .04,.66,.08,.70,.20,.66, .44,.62,.70,.60,.94,.62],
+    [.76,.08, .72,.40,.66,.72,.60,.90, .56,1.00,.46,1.02,.36,.96]],
+ 5:[[.90,.02, .70,.05,.50,.02,.36,.04, .31,.18,.29,.32,.27,.44, .46,.34,.86,.40,.84,.68, .82,.96,.46,1.04,.10,.88]],
+ 6:[[.80,.04, .46,.10,.18,.44,.20,.74, .22,1.00,.70,1.04,.80,.78, .88,.56,.60,.46,.42,.54, .26,.62,.16,.80,.04,.98]],
+ 7:[[.10,.08, .30,.00,.60,.06,.84,.03, .97,.02,.94,.12,.86,.20, .70,.38,.50,.62,.40,.86, .36,.98,.26,1.02,.16,.95]],
+ 8:[[.50,.02, .16,.02,.14,.38,.50,.50, .86,.62,.90,1.00,.50,1.00, .30,1.00,.18,.94,.12,.86],
+    [.54,.02, .88,.02,.86,.38,.50,.50, .14,.62,.10,1.00,.50,1.00, .70,1.00,.82,.94,.88,.86]],
+ 9:[[.80,.06, .62,-.04,.24,-.02,.18,.22, .12,.46,.58,.54,.78,.30, .84,.20,.94,.14,.90,.30, .84,.56,.72,.82,.64,.94, .56,1.04,.44,1.02,.34,.95]]
+};
+const cubic=(a,b,c,d,t)=>{const m=1-t;return m*m*m*a+3*m*m*t*b+3*m*t*t*c+t*t*t*d};
+function dense(ch,map,steps=48){const out=[map(ch[0],ch[1])];let x0=ch[0],y0=ch[1];
+  for(let i=2;i+5<ch.length;i+=6){const[a,b,c,d,e,f]=ch.slice(i,i+6);
+    for(let s=1;s<=steps;s++){const t=s/steps;out.push(map(cubic(x0,a,c,e,t),cubic(y0,b,d,f,t)))}x0=e;y0=f}
+  return out}
+function resample(pts,step){const out=[{x:pts[0].x,y:pts[0].y}];let need=step;
+  for(let i=1;i<pts.length;i++){let ax=pts[i-1].x,ay=pts[i-1].y;const bx=pts[i].x,by=pts[i].y;let seg=Math.hypot(bx-ax,by-ay);
+    while(seg>=need){const r=need/seg;ax+=(bx-ax)*r;ay+=(by-ay)*r;out.push({x:ax,y:ay});seg-=need;need=step}need-=seg}
+  const l=pts[pts.length-1];out.push({x:l.x,y:l.y});return out}
+function tangentAt(p,i,w){const a=p[Math.max(0,i-w)],b=p[Math.min(p.length-1,i+w)];return norm(b.x-a.x,b.y-a.y)}
+function withNormals(p){for(let i=0;i<p.length;i++){const t=tangentAt(p,i,2);p[i].nx=-t.y;p[i].ny=t.x}return p}
+function climbOf(ch){const p=dense(ch,(x,y)=>({x,y}),60);let lo=-1e9,c=0;for(const q of p){lo=Math.max(lo,q.y);c=Math.max(c,lo-q.y)}return c}
+
+/* ---------- layout ---------- */
+function makeLayout(pid,side,track,theme,moon,weather){
+  const {w:W,h:H}=PLATFORMS[pid],k=W/200;
+  const compH=Math.round(H*.14),compTop=H-compH;
+  const yL=Math.round(H*.34),yR=Math.round(H*.15),bulge=H*.065;
+  const ridgeY=x=>yL+(yR-yL)*(x/W)-Math.sin(Math.PI*clamp(x/W,0,1))*bulge;
+  const bermY=x=>compTop-1+Math.sin(x*.07)*1.2*k;
+  const gw=Math.round(W*.21),gh=Math.round(gw*1.2),gx=Math.round(W*.035),gy=Math.round(H*.028);
+  const row1=Math.round(H/2-(2*gh+gy)/2),row2=row1+gh+gy,stag=Math.round(W*.07),rowW=gw*2+gx;
+  const cw=Math.round(W*.24),chh=Math.round(cw*.95);
+  let chalet,mx;
+  if(side==='right'){chalet={x:W-cw-Math.round(3*k),y:compTop-chh-1,w:cw,h:chh};mx=chalet.x-Math.round(8*k)-rowW}
+  else{chalet={x:Math.round(3*k),y:compTop-chh-1,w:cw,h:chh};mx=chalet.x+cw+Math.round(8*k)}
+  const hx=mx+stag;
+  const boxes=[{x:hx,y:row1},{x:hx+gw+gx,y:row1},{x:mx,y:row2},{x:mx+gw+gx,y:row2}];
+  const L={pid,side,track,W,H,k,compH,compTop,ridgeY,bermY,gw,gh,boxes,chalet,
+    speed:78*k,solidW:3,trackOff:1};
+  const crack={x:W-26*k,y:ridgeY(W-26*k)+9*k};
+  L.u0=crack.x*F.x+crack.y*F.y; L.s0=crack.x*D.x+crack.y*D.y;
+  L.u1=(-6*F.x+compTop*F.y)+16*k;
+  const cs=[[0,0],[W,0],[0,H],[W,H]].map(([x,y])=>x*D.x+y*D.y);
+  L.sMin=Math.min(...cs);L.sMax=Math.max(...cs);
+  const sp=new Path2D();sp.moveTo(-2,ridgeY(0));for(let x=0;x<=W;x+=2)sp.lineTo(x,ridgeY(x));
+  sp.lineTo(W+2,ridgeY(W));sp.lineTo(W+2,bermY(W));for(let x=W;x>=0;x-=2)sp.lineTo(x,bermY(x));sp.lineTo(-2,bermY(0));sp.closePath();
+  L.slope=sp;
+  L.ridgeA=new Int16Array(W);L.bermA=new Int16Array(W);
+  for(let x=0;x<W;x++){L.ridgeA[x]=Math.ceil(ridgeY(x)+.5);L.bermA[x]=Math.min(H,Math.floor(bermY(x)))}
+  L.theme=theme||THEMES.day;L.weather=weather||null;L.moonPhase=moon==null?.3:moon;useTheme(L.theme);
+  L.bg=buildBackground(L);L.fg=buildForeground(L);
+  L.bgData=L.bg.getContext('2d').getImageData(0,0,W,H).data;
+  return L}
+const glyphMap=(box,gw,gh)=>(u,v)=>({x:box.x+(u+(1-v)*SLANT-SLANT/2)*gw,y:box.y+v*gh});
+
+/* ---------- background (static, pixel art) ---------- */
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hex(c){return[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)]}
+function buildBackground(L){
+  const {W,H,k,ridgeY}=L;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
+  const im=g.createImageData(W,H),d=im.data;
+  const put=(x,y,c)=>{const i=(y*W+x)*4,v=hex(c);d[i]=v[0];d[i+1]=v[1];d[i+2]=v[2];d[i+3]=255};
+  const th=L.theme,WXd=L.weather||WEATHER.clear,pk=phaseKey(th),B=WXd.deck?{kind:'none'}:th.body,sun={x:W*th.body.x,y:H*th.body.y,r:th.body.r*k},halo=(B.halo||0)*k,
+    st=WXd.sky?WX_SKY[pk][WXd.sky]:th.sky,ns=st.length-1;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const t=Math.pow(clamp(y/(ridgeY(0)*.92),0,1),1.2)*ns,i=Math.min(ns-1,Math.floor(t));
+    put(x,y,bayer(x,y)<t-i?st[i+1]:st[i]);
+    if(B.kind!=='sun')continue;
+    const ds=Math.hypot(x+.5-sun.x,y+.5-sun.y);
+    if(ds<sun.r)put(x,y,B.core);
+    else if(ds<sun.r+halo){const p=Math.pow(1-(ds-sun.r)/halo,1.4)*.85;if(bayer(x,y)<p)put(x,y,B.glow)}
+  }
+  if(th.stars&&!WXd.deck){const r=mulberry(99);for(let n=0;n<48;n++){const x=Math.floor(r()*W),y=Math.floor(r()*(H*.36)),c=r();
+      if(y>ridgeY(x)-3)continue;const col=c<.7?'#FFFFFF':c<.9?'#AAFFFF':'#FFFFAA';put(x,y,col);
+      if(n%9===0){[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{if(x+dx>=0&&x+dx<W&&y+dy>=0)put(x+dx,y+dy,'#5555AA')})}}}
+  if(B.kind==='moon'){const p=L.moonPhase,kx=Math.cos(2*Math.PI*p);
+    for(let y=Math.floor(sun.y-sun.r-3*k);y<=sun.y+sun.r+3*k;y++)for(let x=Math.floor(sun.x-sun.r-3*k);x<=sun.x+sun.r+3*k;x++){
+      if(x<0||y<0)continue;const xn=(x+.5-sun.x)/sun.r,yn=(y+.5-sun.y)/sun.r,rr=Math.hypot(xn,yn);
+      if(rr>1){if(rr<1+3*k/sun.r&&bayer(x,y)<.3*(1-(rr-1)/(3*k/sun.r)))put(x,y,'#000055');continue}
+      const w=Math.sqrt(Math.max(0,1-yn*yn)),xt=w*kx,lit=p<.5?xn>xt:xn<-xt;put(x,y,lit?(xn*xn+yn*yn>.72&&lit?'#AAAAAA':'#FFFFFF'):'#000055')}}
+  g.putImageData(im,0,0);
+  const peak=(px,py,hw,base,lit,shade,capLit,capShade)=>{
+    const split=px+hw*.12;
+    g.fillStyle=lit;g.beginPath();g.moveTo(px-hw,base);g.lineTo(px,py);g.lineTo(split,base);g.fill();
+    g.fillStyle=shade;g.beginPath();g.moveTo(px,py);g.lineTo(px+hw,base);g.lineTo(split,base);g.fill();
+    const dep=(base-py)*.3,lx=px-hw*.3,rx=px+hw*.3,ly=py+dep,ry=py+dep*1.1;
+    g.fillStyle=capLit;g.beginPath();g.moveTo(px,py);g.lineTo(lx,ly);g.lineTo(lx+(px-lx)*.35,ly-dep*.25);g.lineTo(px-hw*.05,ly+dep*.1);g.lineTo(px+hw*.02,ly-dep*.2);g.lineTo(px,py);g.fill();
+    g.fillStyle=capShade;g.beginPath();g.moveTo(px,py);g.lineTo(px+hw*.02,ly-dep*.2);g.lineTo(px+hw*.12,ry-dep*.05);g.lineTo(px+hw*.2,ry-dep*.35);g.lineTo(rx,ry);g.closePath();g.fill();
+  };
+  if(WXd.clouds){[[.62,.07,1],[.2,.06,.8],[.9,.13,.7]].slice(0,WXd.clouds).forEach(([x,y,s])=>drawFlatCloud(g,x*W,y*H,th.cloud,s*k))}
+  if(WXd.deck){const cl=WXd.sky==='storm'?WX_STORM_CLOUD[pk]:th.cloud,r=mulberry(5);
+    const back=[cl[1],cl[2],cl[2]];for(let x=-4;x<W+20;x+=18*k)drawCloud(g,x,(16+r()*6)*k,back,(.65+r()*.25)*k);
+    for(let x=-10;x<W+20;x+=15*k)drawCloud(g,x,(3+r()*6)*k,cl,(.75+r()*.3)*k)}
+  [[.05,.17,.17],[.22,.12,.15],[.40,.10,.17],[.58,.06,.15],[.74,.035,.12]].forEach(([x,y,w])=>peak(x*W,y*H,w*W,H*.45,...th.far));
+  [[-.04,.215,.2],[.18,.22,.15],[.34,.19,.13]].forEach(([x,y,w])=>peak(x*W,y*H,w*W,H*.5,...th.near));
+  /* distant forest on the crest */
+  const rnd=mulberry(7);
+  g.fillStyle=th.forest;
+  for(let x=W*.16;x<W*.8;x+=3.5*k+rnd()*3*k){const b=ridgeY(x)+1,h=(4+rnd()*5)*k*(x>W*.62?.6:1),hw=h*.35;
+    g.beginPath();g.moveTo(x-hw,b);g.lineTo(x,b-h);g.lineTo(x+hw,b);g.fill()}
+  const r3=mulberry(33);
+  for(let x=W*.17;x<W*.86;x+=(4+r3()*5)*k){const base=ridgeY(x)+2*k,h=Math.min((8+r3()*7)*k,base-2);pine(g,x,base,h)}
+  g.fillStyle=th.snow;g.fill(new Path2D(`M-2 ${ridgeY(0)} ${Array.from({length:Math.ceil(W/2)+1},(_,i)=>`L${i*2} ${ridgeY(i*2)}`).join(' ')} L${W+2} ${ridgeY(W)} L${W+2} ${H+2} L-2 ${H+2}Z`));
+  /* crest shade + drift lip, dithered */
+  const im2=g.getImageData(0,0,W,H),d2=im2.data;
+  const put2=(x,y,c)=>{const i=(y*W+x)*4,v=hex(c);d2[i]=v[0];d2[i+1]=v[1];d2[i+2]=v[2]};
+  for(let x=0;x<W;x++){
+    const ry=ridgeY(x);
+    for(let y=Math.ceil(ry);y<ry+8*k&&y<H;y++){const p=(1-(y-ry)/(8*k))*.6;if(bayer(x,y)<p)put2(x,y,th.snowShade)}
+    const by=L.bermY(x);
+    for(let y=Math.floor(by-1);y<by+5*k&&y<H;y++){const dy=y-by;const p=dy<=0?.75:(1-dy/(5*k))*.5;if(y>=0&&bayer(x,y)<p)put2(x,y,th.snowShade)}
+  }
+  if(th.night){const c=L.chalet;for(let y=Math.round(c.y+c.h-1);y<c.y+c.h+5*k&&y<H;y++)for(let x=Math.round(c.x-6*k);x<c.x+c.w*.6;x++){
+    const p=.5*(1-(y-(c.y+c.h))/(5*k))*(1-Math.abs(x-(c.x+c.w*.2))/(c.w*.55));if(x>=0&&p>0&&bayer(x,y)<p)put2(x,y,'#FFFFAA')}
+    const heads=floodHeads(W,H,k);
+    for(let x=0;x<W;x++)for(let y=Math.ceil(ridgeY(x)+1);y<Math.floor(L.bermY(x));y++){
+      const I=floodAt(x,y,heads,k);if(I<=0)continue;const b=bayer(x,y);
+      if(b<I*1.3-.68)put2(x,y,'#FFFFAA');else if(b<I*1.3)put2(x,y,'#FFFFFF')}}
+  g.putImageData(im2,0,0);
+  if(th.night)floodHeads(W,H,k).forEach(f=>{const bx=Math.round(f.bx),by=Math.round(f.by),hx=Math.round(f.hx),hy=Math.round(f.hy);
+    g.fillStyle='#000055';g.fillRect(bx,hy+1,1,by-hy);g.fillRect(bx-1,by-1,3,1);
+    /* lamp housing tipped toward its aim, lit face on the aimed side */
+    const sx=f.d.x<0?-1:1;g.fillRect(hx-(sx<0?2:0),hy-1,3,3);
+    g.fillStyle='#FFFF55';g.fillRect(hx+(sx<0?-3:3),hy-1,1,3);g.fillStyle='#FFFFAA';g.fillRect(hx+(sx<0?-4:4),hy,1,1)});
+  /* ridge pines */
+  const r2=mulberry(21),trees=[];
+  for(let x=W*.2;x<W*.8;x+=(5+r2()*6)*k){const base=ridgeY(x)+1.5*k;const h=Math.min((11+r2()*11)*k,base-3);trees.push([x+r2()*3*k,base,h])}
+  trees.sort((a,b)=>a[1]-b[1]).forEach(t=>pine(g,t[0],t[1],t[2]));
+  if(WXd.fog){const im3=g.getImageData(0,0,W,H),d3=im3.data,fc=hex(WX_ROLE[pk].fog);
+    for(let y=0;y<L.compTop;y++){const p=WXd.fog*(1-clamp((y-H*.08)/(H*.5),0,1));if(p<=0)continue;
+      for(let x=0;x<W;x++)if(bayer(x,y)<p){const i=(y*W+x)*4;d3[i]=fc[0];d3[i+1]=fc[1];d3[i+2]=fc[2]}}
+    g.putImageData(im3,0,0)}
+  return cv}
+/* Slope trees are drawn each frame over the skiers, so a skier higher up the slope passes behind them. */
+function drawSlopeTrees(g,L){
+  if(L.W>=200)[...SLOPE_TREES].sort((a,b)=>a[1]-b[1]).forEach(([x,b,h])=>{g.fillStyle=L.theme.snowShade;g.beginPath();g.ellipse(x+2,b,h*.42,1.6,0,0,Math.PI*2);g.fill();pine(g,x,b,h)})}
+function pine(g,x,base,h){
+  g.fillStyle=C.bulgarian;g.fillRect(Math.round(x-.5),Math.round(base-h*.16),1,Math.ceil(h*.16));
+  for(let i=0;i<3;i++){const top=base-h+i*h*.27,bot=top+h*.46,hw=h*(.2+i*.1);
+    g.fillStyle=TH.pineLit;g.beginPath();g.moveTo(x-hw,bot);g.lineTo(x,top);g.lineTo(x,bot);g.fill();
+    g.fillStyle=TH.pineShade;g.beginPath();g.moveTo(x,top);g.lineTo(x+hw,bot);g.lineTo(x,bot);g.fill();
+    g.fillStyle=TH.pineSnow;g.beginPath();g.moveTo(x,top);g.lineTo(x-hw*.55,top+(bot-top)*.55);g.lineTo(x-hw*.2,top+(bot-top)*.42);g.lineTo(x+hw*.25,top+(bot-top)*.45);g.closePath();g.fill()}}
+function buildForeground(L){
+  /* three-quarter view: gable front faces the viewer, side wall recedes to the right */
+  const {k,chalet:c}=L;const cv=document.createElement('canvas');cv.width=L.W;cv.height=L.H;const g=cv.getContext('2d');
+  const poly=(pts,col)=>{g.fillStyle=col;g.beginPath();pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.closePath();g.fill()};
+  const fw=c.w*.52,fx0=c.x,fx1=c.x+fw,ex=c.x+c.w,b=c.y+c.h,rise=c.h*.1,run=ex-fx1;
+  const ey=c.y+c.h*.5,ax=fx0+fw/2,ay=c.y+c.h*.06,up=x=>rise*(x-fx1)/run;
+  pine(g,ex-3*k,b-rise-c.h*.25,c.h*.9);
+  g.fillStyle=C.celeste;g.beginPath();g.ellipse(fx1+run*.55,b-rise*.4+1,c.w*.42,2.5*k,-.1,0,Math.PI*2);g.fill();
+  /* side wall in shade, glowing windows */
+  poly([[fx1,ey],[ex,ey-rise],[ex,b-rise],[fx1,b]],C.bulgarian);
+  const wh=(b-ey)*.36;
+  [.18,.58].forEach(f=>{const x0=fx1+run*f,x1=x0+run*.26,y0=ey+(b-ey)*.28;
+    poly([[x0,y0-up(x0)],[x1,y0-up(x1)],[x1,y0+wh-up(x1)],[x0,y0+wh-up(x0)]],C.chrome);
+    const xm=(x0+x1)/2;g.fillStyle=C.bulgarian;g.fillRect(Math.round(xm),Math.round(y0-up(xm)),1,Math.round(wh))});
+  /* front face in sun: logs, door, balcony, gable window */
+  const front=new Path2D();front.moveTo(ax,ay+2*k);front.lineTo(fx0,ey);front.lineTo(fx0,b);front.lineTo(fx1,b);front.lineTo(fx1,ey);front.closePath();
+  g.fillStyle=C.windsor;g.fill(front);
+  g.save();g.clip(front);g.fillStyle=C.bulgarian;for(let y=ay+4*k;y<b;y+=3*k)g.fillRect(fx0,Math.round(y),fw,1);g.restore();
+  const dw=Math.round(fw*.3),dh=Math.round((b-ey)*.58);
+  g.fillStyle=C.bulgarian;g.fillRect(Math.round(ax-dw/2),Math.round(b-dh),dw,dh);
+  g.fillStyle=C.chrome;g.fillRect(Math.round(ax+dw/2)-2,Math.round(b-dh*.5),1,1);
+  g.fillStyle=C.bulgarian;g.fillRect(Math.round(fx0-1),Math.round(ey),Math.round(fw+2),2);
+  for(let x=fx0;x<=fx1;x+=3*k)g.fillRect(Math.round(x),Math.round(ey-3*k),1,Math.round(3*k));
+  g.fillRect(Math.round(fx0-1),Math.round(ey-3*k),Math.round(fw+2),1);
+  const ws=Math.max(4,Math.round(fw*.26));
+  g.fillStyle=C.chrome;g.fillRect(Math.round(ax-ws/2),Math.round(ay+(ey-ay)*.42),ws,ws);
+  g.fillStyle=C.icterine;g.fillRect(Math.round(ax-ws/2)+1,Math.round(ay+(ey-ay)*.42)+1,ws-2,ws-2);
+  g.fillStyle=C.bulgarian;g.fillRect(Math.round(ax)-0,Math.round(ay+(ey-ay)*.42),1,ws);
+  /* side roof plane under snow, with fascia and icicles */
+  const o=2*k;
+  poly([[ax,ay],[ax+run,ay-rise],[ex+o,ey-rise+o],[fx1+o,ey+o]],C.white);
+  poly([[fx1+o,ey+o],[ex+o,ey-rise+o],[ex+o,ey-rise+o-2.5*k],[fx1+o,ey+o-2.5*k]],C.celeste);
+  poly([[fx1+o,ey+o],[ex+o,ey-rise+o],[ex+o,ey-rise+o+1],[fx1+o,ey+o+1]],C.bulgarian);
+  g.fillStyle=C.celeste;for(let x=fx1+o+2*k;x<ex;x+=3*k)g.fillRect(Math.round(x),Math.round(ey+o+1-up(x)),1,1+((x*7|0)%2));
+  /* front bargeboards with snow */
+  g.lineCap='round';
+  [[fx0-o,ey+o],[fx1+o,ey+o]].forEach(([x,y])=>{g.strokeStyle=C.bulgarian;g.lineWidth=2*k;g.beginPath();g.moveTo(ax,ay);g.lineTo(x,y);g.stroke();
+    g.strokeStyle=C.white;g.lineWidth=1.4*k;g.beginPath();g.moveTo(ax,ay-1*k);g.lineTo(x,y-1.2*k);g.stroke()});
+  /* chimney on the side roof */
+  const cf=.62,cx=ax+run*cf,cy=ay-rise*cf+(ey-ay)*.3;
+  g.fillStyle=C.darkGray;g.fillRect(Math.round(cx-1.5*k),Math.round(cy-6*k),Math.round(3*k),Math.round(7*k));
+  g.fillStyle=C.white;g.fillRect(Math.round(cx-2*k),Math.round(cy-6*k-1),Math.round(4*k),2);
+  L.chimney={x:cx,y:cy-6*k-2,out:1};
+  return cv}
+
+/* ---------- skiers ---------- */
+function strokePts(L,ch,box){return withNormals(resample(dense(ch,glyphMap(box,L.gw,L.gh),60),.5))}
+function buildSkier(L,sp,color,t0){
+  const k=L.k,start=sp[0],d0=tangentAt(sp,0,6);
+  const P0={x:L.W+10,y:clamp(start.y-(L.W+10-start.x)*.45,L.ridgeY(L.W)+8*k,L.compTop-10)};
+  const len=Math.hypot(start.x-P0.x,start.y-P0.y),a=norm(-1,.45);
+  const C1={x:P0.x+a.x*len*.35,y:P0.y+a.y*len*.35},C2={x:start.x-d0.x*len*.4,y:start.y-d0.y*len*.4};
+  const entry=resample(dense([P0.x,P0.y,C1.x,C1.y,C2.x,C2.y,start.x,start.y],(x,y)=>({x,y}),60),.5);
+  const pts=entry.slice(0,-1).map(p=>({x:p.x,y:p.y,vis:false})).concat(sp.map(p=>({...p,vis:true})));
+  const sIdx=entry.length-1;
+  let t=t0;pts[0].t=t;
+  for(let i=1;i<pts.length;i++){
+    const ds=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y),tg=tangentAt(pts,i,3);
+    const down=tg.x*F.x+tg.y*F.y;
+    const sv=L.speed*(.72+.55*Math.max(0,down))*(1-.35*Math.max(0,-tg.y));
+    let v=sv;if(!pts[i].vis){const e=smooth(clamp((sIdx-i)*.5/(30*k),0,1));v=lerp(sv,170*k,e)}
+    t+=ds/v;pts[i].t=t}
+  let prev=null;for(let i=0;i<pts.length;i++){const tg=tangentAt(pts,i,5);let h=Math.atan2(tg.y,tg.x);
+    if(prev!==null){while(h-prev>Math.PI)h-=2*Math.PI;while(h-prev<-Math.PI)h+=2*Math.PI}pts[i].h=h;prev=h}
+  const n=pts.length,end=pts[n-1],dEnd=tangentAt(pts,n-1,6),endH=end.h;
+  const rd=(dEnd.x*REST.x+dEnd.y*REST.y)>=0?REST:{x:-REST.x,y:-REST.y};
+  let restH=Math.atan2(rd.y,rd.x);while(restH-endH>Math.PI)restH-=2*Math.PI;while(restH-endH<-Math.PI)restH+=2*Math.PI;
+  const stopLen=4*k;
+  return{pts,sIdx,t0,tEnd:end.t,end,dEnd,endH,restH,stopLen,color,
+    restPos:{x:end.x+dEnd.x*stopLen,y:end.y+dEnd.y*stopLen}}}
+function slotsFor(time){
+  const[h,m]=time.split(':').map(Number),hh=ui.fmt==='12'?(h%12||12):h;
+  const hs=ui.lz==='on'||hh>=10?String(hh).padStart(2,'0'):String(hh),ms=String(m).padStart(2,'0');
+  const out=hs.length===2?[[+hs[0],0]]:[];out.push([+hs[hs.length-1],1],[+ms[0],2],[+ms[1],3]);return out}
+function fmtTime(time){const s=slotsFor(time).map(x=>x[0]).join('');return s.slice(0,-2)+':'+s.slice(-2)}
+function skiersFor(L,time){
+  const list=[];
+  slotsFor(time).forEach(([d,i])=>GLYPHS[d].forEach((ch,j)=>{
+    list.push(buildSkier(L,strokePts(L,ch,L.boxes[i]),JACKETS[(i*2+j)%JACKETS.length],T.drawStart+i*T.stagger+j*T.pair))}));
+  return list}
+function skierState(sk,tau){
+  if(tau<sk.t0)return null;
+  const p=sk.pts;
+  if(tau<=sk.tEnd){let lo=0,hi=p.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(p[m].t<=tau)lo=m;else hi=m}
+    const a=p[lo],b=p[hi],f=b.t>a.t?(tau-a.t)/(b.t-a.t):0;
+    return{x:lerp(a.x,b.x,f),y:lerp(a.y,b.y,f),h:lerp(a.h,b.h,f),idx:lo,spray:0}}
+  const u=clamp((tau-sk.tEnd)/T.stop,0,1),e=easeOut(u);
+  return{x:sk.end.x+sk.dEnd.x*sk.stopLen*e,y:sk.end.y+sk.dEnd.y*sk.stopLen*e,h:lerp(sk.endH,sk.restH,smooth(u)),idx:p.length-1,spray:u<1?u:0}}
+function exitPath(L,sk){
+  if(sk.exit)return sk.exit;const k=L.k,P=sk.restPos;
+  const cy=L.compTop-8,X={x:-14,y:Math.min(P.y+(P.x+14)*.35,cy)};
+  const c1={x:P.x+F.x*14*k,y:Math.min(P.y+F.y*14*k,cy)},c2={x:X.x-F.x*22*k,y:Math.min(X.y-F.y*22*k,cy)};
+  const pts=resample(dense([P.x,P.y,c1.x,c1.y,c2.x,c2.y,X.x,X.y],(x,y)=>({x,y}),60),.5);
+  let prev=sk.restH;for(let i=0;i<pts.length;i++){const tg=tangentAt(pts,i,5);let h=Math.atan2(tg.y,tg.x);
+    while(h-prev>Math.PI)h-=2*Math.PI;while(h-prev<-Math.PI)h+=2*Math.PI;pts[i].h=h;prev=h}
+  return sk.exit=pts}
+function exitState(L,sk,tau,i){
+  const te=tau-.03*i;if(te<0)return{x:sk.restPos.x,y:sk.restPos.y,h:sk.restH};
+  const p=exitPath(L,sk),s=.5*380*L.k*te*te+20*L.k*te,idx=s/.5;
+  if(idx>=p.length-1)return null;
+  const a=p[Math.floor(idx)],b=p[Math.ceil(idx)],f=idx-Math.floor(idx),w=smooth(clamp(te/.35,0,1));
+  return{x:lerp(a.x,b.x,f),y:lerp(a.y,b.y,f),h:lerp(sk.restH,lerp(a.h,b.h,f),w)}}
+
+/* ---------- drawing ---------- */
+function drawTrack(g,L,p,i0,i1){
+  if(i1-i0<1)return;g.lineCap='round';g.lineJoin='round';g.strokeStyle=C.darkGray;
+  if(L.track==='solid'){g.lineWidth=L.solidW;g.beginPath();g.moveTo(p[i0].x,p[i0].y);for(let i=i0+1;i<=i1;i++)g.lineTo(p[i].x,p[i].y);g.stroke();return}
+  g.lineWidth=1;const o=L.trackOff;
+  for(const s of[-1,1]){g.beginPath();for(let i=i0;i<=i1;i++){const x=p[i].x+p[i].nx*o*s,y=p[i].y+p[i].ny*o*s;i===i0?g.moveTo(x,y):g.lineTo(x,y)}g.stroke()}}
+function circle(g,x,y,r){g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill()}
+function drawSkier(g,x,y,h,col,k){
+  const s=Math.max(.85,k),L=Math.max(3.2,3.6*k),cx=Math.cos(h),sy=Math.sin(h),px=-sy,py=cx;
+  g.lineCap='round';g.lineWidth=1;
+  g.strokeStyle=C.darkGray;
+  for(const o of[-1,1]){g.beginPath();g.moveTo(x+px*o*2.4*s-cx*.5,y+py*o*2.4*s-sy*.5-1.6*s);g.lineTo(x+px*o*2.8*s-cx*3.2*s,y+py*o*2.8*s-sy*3.2*s);g.stroke()}
+  g.strokeStyle=C.oxford;
+  for(const o of[-1,1]){const ox=px*o*1.05*s,oy=py*o*1.05*s;g.beginPath();g.moveTo(x-cx*L+ox,y-sy*L+oy);g.lineTo(x+cx*L*1.15+ox,y+sy*L*1.15+oy);g.stroke()}
+  const bx=x+cx*.5,by=y+sy*.5-1.7*s;
+  g.fillStyle=col;circle(g,bx,by,1.9*s);
+  g.fillStyle=C.oxford;circle(g,bx+cx*.5,by-1.9*s,1.25*s)}
+function drawSpray(g,st,k,u){
+  g.fillStyle=u<.5?C.babyBlue:C.celeste;const side=st.h+Math.PI/2;
+  for(let j=0;j<6;j++){const a=side+(j-2.5)*.28,r=(2+u*5)*k*(0.7+hash(j)*.5);
+    g.fillRect(Math.round(st.x+Math.cos(a)*r),Math.round(st.y+Math.sin(a)*r),1,1)}}
+const n2=(x,y)=>clamp(.5+.28*Math.sin(x*1.3+Math.sin(y*.7)*2)+.22*Math.sin(y*1.1+Math.cos(x*.9)*1.5),0,1);
+function aval(L,tau){
+  if(tau<T.flowStart||tau>T.flowEnd+.3)return null;
+  const k=L.k,a=clamp((tau-T.flowStart)/(T.flowEnd-T.flowStart),0,1),uf=L.u0+(L.u1-L.u0)*Math.pow(a,1.25);
+  const fade=tau>T.flowEnd?1-(tau-T.flowEnd)/.3:1,grow=Math.min(1,a*5)*fade,amp=Math.min(1,a*2.5);
+  const n=Math.ceil(L.sMax-L.sMin)+2,fr=new Float32Array(n);
+  for(let i=0;i<n;i++){const s=L.sMin+i;fr[i]=uf+amp*k*(14*(noise(s*.045+1.3)-.5)+6*(noise(s*.13+tau*1.7)-.5))}
+  return{a,uf,fade,grow,front:s=>fr[clamp(Math.round(s-L.sMin),0,n-1)]}}
+const pt=(u,s)=>({x:F.x*u+D.x*s,y:F.y*u+D.y*s});
+function dpat(g,col,level){
+  const key=col+level;g.__pats=g.__pats||{};if(g.__pats[key])return g.__pats[key];
+  const c=document.createElement('canvas');c.width=4;c.height=4;const cg=c.getContext('2d');cg.fillStyle=col;
+  for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(bayer(x,y)<level)cg.fillRect(x,y,1,1);
+  return g.__pats[key]=g.createPattern(c,'repeat')}
+/* pixel pass: erase old tracks behind the front, churn the moving snow, streak the wake, shade ahead */
+function avalanchePixels(g,L,A,tau){
+  const {W,H,k}=L,im=g.getImageData(0,0,W,H),d=im.data,bg=L.bgData;
+  const body=26*k*A.grow+1,wake=40*k,sh0=-9*k,sh1=-2*k;
+  const set=(i,c)=>{const v=hex(c);d[i]=v[0];d[i+1]=v[1];d[i+2]=v[2]};
+  for(let x=0;x<W;x++){const top=L.ridgeA[x],bot=L.bermA[x];
+    for(let y=top;y<bot;y++){
+      const u=x*F.x+y*F.y,s=x*D.x+y*D.y,dep=A.front(s)-u;if(dep<sh0)continue;
+      const i=(y*W+x)*4,b=bayer(x,y);
+      if(dep<0){if(dep<sh1&&b<.5*(dep-sh0)/(sh1-sh0)*A.grow)set(i,C.babyBlue);continue}
+      d[i]=bg[i];d[i+1]=bg[i+1];d[i+2]=bg[i+2];
+      if(dep<body){const t=dep/body,c=n2(s*.3,u*.3-tau*9);
+        if(c>.86&&t<.6)set(i,C.babyBlue);else if(b<(c-.4)*1.8*(1-t))set(i,C.celeste);else set(i,C.white)}
+      else if(dep<body+wake){const w=(1-(dep-body)/wake)*A.fade,st=Math.pow(.5+.5*Math.sin(s*.55+3*noise(s*.1)),8);
+        if(b<st*w*.8)set(i,C.celeste)}}}
+  g.putImageData(im,0,0)}
+function drawAvalanche(g,L,tau,A){
+  const k=L.k;
+  if(tau>=T.crack&&tau<T.flowStart+.15){
+    const grow=clamp((tau-T.crack)/.15,0,1),half=70*k*grow;g.save();g.clip(L.slope);
+    g.strokeStyle=C.liberty;g.lineWidth=1;g.beginPath();let first=true;
+    for(let s=-half;s<=half;s+=2.5*k){const j=((Math.round(s/(2.5*k))&1)?1:-1)*1.1*k,q=pt(L.u0+j,L.s0+s);first?g.moveTo(q.x,q.y):g.lineTo(q.x,q.y);first=false}
+    g.stroke();g.restore()}
+  if(!A)return;
+  const {grow,front}=A;g.save();g.clip(L.slope);
+  const inView=q=>q.x>-14&&q.x<L.W+14&&q.y>-14&&q.y<L.H+14;
+  /* second rank of billows, riding on the moving snow */
+  const back=[];for(let s=L.sMin;s<=L.sMax;s+=5*k){const r=k*(2.5+4*noise(s*.17+tau*1.4))*grow;if(r<.6)continue;
+    const q=pt(front(s)-(11+5*noise(s*.09))*k*grow,s);if(inView(q))back.push({...q,r})}
+  g.fillStyle=C.celeste;back.forEach(b=>circle(g,b.x+.8*k,b.y+1.1*k,b.r));g.fillStyle=C.white;back.forEach(b=>circle(g,b.x,b.y,b.r*.82));
+  /* leading billows: they churn forward and back as they roll */
+  const bill=[];
+  for(let s=L.sMin-10;s<=L.sMax+10;s+=3.2*k){
+    const r=k*(3.5+5*noise(s*.11+3.1)+1.8*noise(s*.23+tau*2.6))*grow;if(r<.6)continue;
+    const q=pt(front(s)-r*.7+Math.sin(tau*6+s*.3)*1.2*k,s);if(inView(q))bill.push({...q,r})}
+  g.fillStyle=dpat(g,C.celeste,.3);bill.forEach(b=>circle(g,b.x,b.y,b.r+2*k));
+  g.fillStyle=C.babyBlue;bill.forEach(b=>circle(g,b.x+.8*k,b.y+1.2*k,b.r));
+  g.fillStyle=C.celeste;bill.forEach(b=>circle(g,b.x+.3*k,b.y+.5*k,b.r*.95));
+  g.fillStyle=C.white;bill.forEach(b=>circle(g,b.x-.4*k,b.y-.5*k,b.r*.8));
+  /* tumbling debris thrown ahead of the front */
+  const cs=Math.max(1,Math.round(2*k));
+  for(let m=0;m<28;m++){const s=L.sMin+hash(m*5.3)*(L.sMax-L.sMin),lead=(2+hash(m*9.1)*10)*k*grow;
+    const q=pt(front(s)+lead,s);if(!inView(q))continue;const hop=Math.abs(Math.sin(tau*9+m*1.7))*2.5*k;
+    g.fillStyle=C.babyBlue;g.fillRect(Math.round(q.x),Math.round(q.y)+1,cs,1);
+    g.fillStyle=C.white;g.fillRect(Math.round(q.x),Math.round(q.y-hop)-cs+1,cs,cs);
+    g.fillStyle=C.celeste;g.fillRect(Math.round(q.x)+cs-1,Math.round(q.y-hop),1,1)}
+  const fr=Math.floor(tau*14);
+  for(let m=0;m<70;m++){const s=L.sMin+hash(m*3.7)*(L.sMax-L.sMin),q=pt(front(s)+hash(m*7.1+fr)*9*k*grow,s);
+    g.fillStyle=m%3?C.babyBlue:C.lightGray;g.fillRect(Math.round(q.x),Math.round(q.y),1,1)}
+  g.restore()}
+function drawCampfire(g,L,clock){
+  const k=L.k,c=L.chalet,fx=c.x-9*k,fy=L.compTop-5*k;
+  g.fillStyle=dpat(g,'#FFAA55',.35);g.beginPath();g.ellipse(fx,fy,10*k,3.2*k,0,0,Math.PI*2);g.fill();
+  g.fillStyle=dpat(g,'#FFFFAA',.3);g.beginPath();g.ellipse(fx,fy,5*k,1.8*k,0,0,Math.PI*2);g.fill();
+  g.lineWidth=1;g.strokeStyle='#550000';g.beginPath();g.moveTo(fx-4*k,fy);g.lineTo(fx+4*k,fy-1.5*k);g.moveTo(fx-4*k,fy-1.5*k);g.lineTo(fx+4*k,fy);g.stroke();
+  const tongue=(ox,hgt,sway,s,col)=>{g.fillStyle=col;g.beginPath();g.moveTo(fx+ox-1.9*k*s,fy-.8*k);g.quadraticCurveTo(fx+ox-1.2*k*s,fy-.8*k-hgt*.6*s,fx+ox+sway,fy-.8*k-hgt*s);g.quadraticCurveTo(fx+ox+1.2*k*s,fy-.8*k-hgt*.6*s,fx+ox+1.9*k*s,fy-.8*k);g.closePath();g.fill()};
+  for(let i=0;i<3;i++){const ox=(i-1)*1.8*k,h=(5+2.4*noise(clock*6+i*2.1))*k*(i===1?1.3:.85),sw=Math.sin(clock*9+i*1.7)*.9*k;
+    tongue(ox,h,sw,1,'#FF0000');tongue(ox,h,sw,.72,'#FF5500');tongue(ox,h,sw,.46,'#FFAA00');if(i===1)tongue(ox,h,sw,.24,'#FFFF55')}
+  g.fillStyle='#555555';for(let x=fx-5*k;x<=fx+5*k;x+=2.5*k)g.fillRect(Math.round(x),Math.round(fy),1,1);
+  for(let i=0;i<3;i++){const q=(clock*.8+i/3)%1;if(q>.8)continue;g.fillStyle=q<.45?'#FFAA00':'#FF5500';
+    g.fillRect(Math.round(fx+Math.sin(q*9+i)*2*k),Math.round(fy-7*k-q*10*k),1,1)}}
+function drawSmoke(g,L,clock){
+  const {x,y,out}=L.chimney,k=L.k;
+  for(let i=0;i<4;i++){const p=(clock*.22+i/4)%1;if(p>.9)continue;
+    g.fillStyle=p<.45?C.lightGray:C.celeste;circle(g,x+out*p*8*k+Math.sin(p*6+i)*1.2*k,y-p*16*k,(.8+p*2.4)*k)}}
+function drawComps(g,L,secs){
+  const k=L.k,y=L.compTop+L.compH/2+1;
+  g.fillStyle=TH.text;g.font=`700 ${Math.round(17*k)}px "Roboto Condensed","Arial Narrow",sans-serif`;g.textBaseline='middle';
+  g.textAlign='left';g.fillText('28°',4*k,y);g.textAlign='center';g.fillText('SEP 29',L.W/2,y);
+  g.textAlign='right';g.fillText(':'+String(secs).padStart(2,'0'),L.W-4*k,y)}
+function quantize(g,W,H){const im=g.getImageData(0,0,W,H),d=im.data;for(let i=0;i<d.length;i+=4){d[i]=Math.round(d[i]/85)*85;d[i+1]=Math.round(d[i+1]/85)*85;d[i+2]=Math.round(d[i+2]/85)*85;d[i+3]=255}g.putImageData(im,0,0)}
+
+function render(g,L,f){
+  useTheme(L.theme);
+  const {W,H}=L,tau=f.tau,tr=!!f.old;
+  g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.drawImage(L.bg,0,0);
+  if(tr&&tau<T.flowEnd+.3)f.old.forEach(sk=>drawTrack(g,L,sk.pts,sk.sIdx,sk.pts.length-1));
+  const A=tr?aval(L,tau):null;
+  if(A)avalanchePixels(g,L,A,tau);
+  if(tr)drawAvalanche(g,L,tau,A);
+  const states=f.neu.map(sk=>skierState(sk,tau));
+  f.neu.forEach((sk,i)=>{const s=states[i];if(s&&s.idx>sk.sIdx)drawTrack(g,L,sk.pts,sk.sIdx,s.idx)});
+  g.drawImage(L.fg,0,0);drawSmoke(g,L,f.clock);if(L.theme.night)drawCampfire(g,L,f.clock);drawComps(g,L,f.secs);
+  if(tr&&tau<T.exitEnd+.4)f.old.forEach((sk,i)=>{const s=exitState(L,sk,tau,i);if(s)drawSkier(g,s.x,s.y,s.h,sk.color,L.k)});
+  f.neu.forEach((sk,i)=>{const s=states[i];if(!s)return;drawSkier(g,s.x,s.y,s.h,sk.color,L.k);if(s.spray)drawSpray(g,s,L.k,s.spray)});
+  drawSlopeTrees(g,L);
+  drawWeather(g,L,f.clock);
+  quantize(g,W,H);
+  if(f.paths){g.save();g.setLineDash([1,2]);g.lineWidth=1;
+    [...(f.old||[]),...f.neu].forEach(sk=>{
+      g.strokeStyle=C.picton;g.beginPath();for(let i=0;i<=sk.sIdx;i+=2)i?g.lineTo(sk.pts[i].x,sk.pts[i].y):g.moveTo(sk.pts[i].x,sk.pts[i].y);g.stroke();
+      const e=exitPath(L,sk);g.strokeStyle=C.red;g.beginPath();e.forEach((q,i)=>i?g.lineTo(q.x,q.y):g.moveTo(q.x,q.y));g.stroke()});
+    g.restore()}
+  if(f.marks)f.neu.forEach(sk=>{const a=sk.pts[sk.sIdx],b=sk.end;g.fillStyle='#00AA55';circle(g,a.x,a.y,1.8);g.fillStyle='#FF0000';circle(g,b.x,b.y,1.8)})}
+/* mode 'full' animates; 'still' freezes everything in place (Balanced / Battery saver).
+   snowStyle: 'dots' white + shadow, 'blue' light-blue + dark shadow, 'crystal' plus-shaped flakes, 'mixed' crystals + blue dots. */
+let WX_MODE='full',SNOW_STYLE='mixed';
+function drawWeather(g,L,clock){
+  const w=L.weather;if(!w)return;const {W,H,k}=L,pk=phaseKey(L.theme),top=L.compTop-2,still=WX_MODE!=='full',t=still?2.3:clock;
+  if(w.lightning){
+    /* The same bolt in every mode, between the two big peaks on the left. Still modes hold it;
+       full animation flashes it every 5 s as a double flicker: on with a sky flash, off, on again. */
+    let on=still,flash=false;
+    if(!still){const c=t%5;on=c<.12||(c>.2&&c<.34);flash=c<.06}
+    if(flash){g.fillStyle=dpat(g,'#FFFFFF',.35);g.fillRect(0,0,W,L.ridgeY(W/2))}
+    if(on)drawBolt(g,L,mulberry(307),W*.2,6*k,W*.1)}
+  if(w.precip==='rain'){g.strokeStyle=WX_ROLE[pk].rain;g.lineWidth=1;g.beginPath();
+    /* still frames show more drops so the rain reads without motion */
+    const nr=still?Math.round(w.rate*(w.len<3?2:1.7)):w.rate;
+    for(let i=0;i<nr;i++){const x0=hash(i*1.7)*(W+40),y0=hash(i*9.3)*(top+20),y=(y0+t*w.speed*k)%(top+20)-10,x=x0-(y+10)*.3;
+      if(y+w.len*k>top)continue;g.moveTo(x,y);g.lineTo(x-w.len*k*.3,y+w.len*k)}g.stroke()}
+  if(w.precip==='snow'){const n=still?Math.round(w.rate*1.5):w.rate;for(let i=0;i<n;i++){const x0=hash(i*2.9)*W,y0=hash(i*5.1)*top,y=(y0+t*w.speed*k*(.6+hash(i)*.8))%top,
+      x=Math.round((x0+Math.sin(t*1.3+i)*3*k+W)%W),yy=Math.round(y),big=i%3===0;if(yy>top-3)continue;flake(g,L,x,yy,big)}}}
+/* Lightning after natural bolts: a 1 px pale core with a soft blue glow, many small irregular kinks
+   (midpoint displacement), and thin branches that split off and fade. */
+function boltPath(r,x0,y0,x1,y1,depth,rough){let pts=[[x0,y0],[x1,y1]];
+  for(let d=0;d<depth;d++){const out=[pts[0]];const amp=rough/(1<<d);
+    for(let i=1;i<pts.length;i++){const [a,b]=pts[i-1],[c,e]=pts[i];out.push([(a+c)/2+(r()-.5)*2*amp,(b+e)/2+(r()-.5)*amp*.5]);out.push([c,e])}pts=out}
+  return pts}
+function drawBolt(g,L,r,x0,y0,x1){const k=L.k,y1=L.ridgeY(x1)-2;
+  const main=boltPath(r,x0,y0,x1,y1,5,9*k),branches=[];
+  [.28,.45,.62].forEach((f,j)=>{const i=Math.floor(main.length*f),[bx,by]=main[i],side=j%2?1:-1,len=(12+r()*12)*k;
+    branches.push(boltPath(r,bx,by,bx+side*len*.7,Math.min(by+len,L.ridgeY(bx+side*len*.7)-3),4,4*k))});
+  const line=(ps,style,wd)=>{g.strokeStyle=style;g.lineWidth=wd;g.lineJoin='round';g.beginPath();ps.forEach(([a,b],i)=>i?g.lineTo(a,b):g.moveTo(a,b));g.stroke()};
+  line(main,dpat(g,'#AAAAFF',.55),3);branches.forEach(b=>line(b,dpat(g,'#5555AA',.5),2));
+  branches.forEach(b=>line(b.slice(0,Math.ceil(b.length*.8)),'#AAFFFF',1));line(main,'#FFFFFF',1)}
+function flake(g,L,x,y,big){
+  const px=(c,a,b,w,h)=>{g.fillStyle=c;g.fillRect(a,b,w||1,h||1)};
+  if(SNOW_STYLE==='dots'){px(L.theme.snowShadow,x+1,y+(big?2:1),big?2:1,1);px('#FFFFFF',x,y,big?2:1,big?2:1)}
+  else if(SNOW_STYLE==='blue'){px('#5555AA',x+1,y+(big?2:1),big?2:1,1);px('#AAAAFF',x,y,big?2:1,big?2:1)}
+  else if(SNOW_STYLE==='crystal'){if(big){px('#5555AA',x+1,y+2);px('#AAAAFF',x-1,y);px('#AAAAFF',x+1,y);px('#AAAAFF',x,y-1);px('#AAAAFF',x,y+1);px('#FFFFFF',x,y)}
+    else{px('#5555AA',x+1,y+1);px('#FFFFFF',x,y)}}
+  else if(SNOW_STYLE==='bold'){if(big){px('#000055',x+1,y+2);px('#5555AA',x-1,y);px('#5555AA',x+1,y);px('#5555AA',x,y-1);px('#5555AA',x,y+1);px('#FFFFFF',x,y)}
+    else{px('#5555AA',x+1,y+1);px('#AAAAFF',x,y)}}
+  else{if(big){px('#5555AA',x+1,y+2);px('#AAAAFF',x-1,y);px('#AAAAFF',x+1,y);px('#AAAAFF',x,y-1);px('#AAAAFF',x,y+1);px('#FFFFFF',x,y)}
+    else{px('#5555AA',x+1,y+1);px('#AAAAFF',x,y)}}}
+function transDur(neu){return Math.max(...neu.map(s=>s.tEnd))+T.stop+.3}
+
+/* ---------- weather UI ---------- */
+const $=id=>document.getElementById(id);
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ui={plat:'emery',side:'right',fmt:'24',lz:'on',trk:'double'};
+const PHASES=['sunrise','day','sunset','night'],TIMES={sunrise:'07:22',day:'12:30',sunset:'19:18',night:'23:05'};
+const MOON=.3,CACHE={};
+let wxKey='rain',ph='day',trans=null,cur=null,last=performance.now();
+const face=$('face'),off=document.createElement('canvas');off.width=200;off.height=228;const octx=off.getContext('2d',{willReadFrequently:true});
+function layout(p,w){const k=p+'/'+w;return CACHE[k]||(CACHE[k]=makeLayout(ui.plat,ui.side,ui.trk,THEMES[p],MOON,WEATHER[w]))}
+function show(){const L=layout(ph,wxKey);trans=null;cur={L,sk:skiersFor(L,TIMES[ph])};
+  $('ph').textContent=WEATHER[wxKey].name+' · '+THEMES[ph].name;$('code').textContent='WMO '+WEATHER[wxKey].codes;
+  document.querySelectorAll('#wx button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===wxKey));
+  document.querySelectorAll('#tod button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===ph));
+  document.querySelectorAll('#grid td button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.w===wxKey&&b.dataset.p===ph))}
+function next(){const [h,m]=TIMES[ph].split(':').map(Number),mm=(m+1)%60,to=String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+  const L=cur.L;trans={L,old:cur.sk,neu:skiersFor(L,to),tau:0};trans.dur=transDur(trans.neu)}
+function tick(now){const dt=Math.min(.1,(now-last)/1000);last=now;
+  if(trans){trans.tau+=dt;if(trans.tau>=trans.dur){cur={L:trans.L,sk:trans.neu};trans=null}}
+  const clock=reduced?2.3:now/1000,f=trans?{old:trans.old,neu:trans.neu,tau:trans.tau}:{old:null,neu:cur.sk,tau:1e9};
+  Object.assign(f,{clock,secs:new Date().getSeconds()});render(octx,trans?trans.L:cur.L,f);
+  const g=face.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(off,0,0,face.width,face.height);requestAnimationFrame(tick)}
+function buildControls(){
+  $('wx').innerHTML=Object.keys(WEATHER).map(k=>`<button type="button" data-k="${k}">${WEATHER[k].name}</button>`).join('');
+  $('tod').innerHTML=PHASES.map(k=>`<button type="button" data-k="${k}">${THEMES[k].name}</button>`).join('');
+  document.querySelectorAll('#wx button').forEach(b=>b.onclick=()=>{wxKey=b.dataset.k;show()});
+  document.querySelectorAll('#tod button').forEach(b=>b.onclick=()=>{ph=b.dataset.k;show()});
+  $('btn-next').onclick=()=>{if(!trans)next()}}
+function buildGrid(){const t=$('grid');
+  t.innerHTML='<thead><tr><th></th>'+PHASES.map(p=>`<th scope="col">${THEMES[p].name}</th>`).join('')+'</tr></thead><tbody>'+
+    Object.keys(WEATHER).map(w=>`<tr><th scope="row">${WEATHER[w].name}</th>`+PHASES.map(p=>`<td><button type="button" data-w="${w}" data-p="${p}" aria-label="${WEATHER[w].name} at ${THEMES[p].name}"><canvas width="200" height="228"></canvas></button></td>`).join('')+'</tr>').join('')+'</tbody>';
+  t.querySelectorAll('td button').forEach(b=>{const L=layout(b.dataset.p,b.dataset.w),g=b.querySelector('canvas').getContext('2d',{willReadFrequently:true});
+    render(g,L,{old:null,neu:skiersFor(L,TIMES[b.dataset.p]),tau:1e9,clock:b.dataset.w==='storm'?.05:2.3,secs:14});
+    b.onclick=()=>{wxKey=b.dataset.w;ph=b.dataset.p;show();face.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center'})}})}
+const boot=()=>{buildControls();show();buildGrid();show();requestAnimationFrame(t=>{last=t;tick(t)})};
+(document.fonts&&document.fonts.load?document.fonts.load('700 17px "Roboto Condensed"').catch(()=>{}):Promise.resolve()).then(boot);
+})();
+</script>
