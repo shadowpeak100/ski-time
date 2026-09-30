@@ -6,7 +6,6 @@
 
 #define CRACK_END_MS (AV_FLOW_START_MS + 150)
 
-static uint8_t s_streak[AV_MAX_S];
 static AvalFrame s_A;
 
 // Prototype hash(m*5.3), hash(m*9.1) and hash(m*3.7), scaled to 0..255.
@@ -43,8 +42,6 @@ static void dot(GContext *ctx, int x, int y, int w, int h, GColor c) {
   graphics_fill_rect(ctx, GRect(x, y, w, h), 0, GCornerNone);
 }
 
-void aval_draw_init(void) { aval_streaks(s_streak); }
-
 static void draw_crack(GContext *ctx, const Layout *L, uint16_t t) {
   float k = L->k, grow = (t - AV_CRACK_MS) / 150.0f, step = 2.5f * k;
   if (grow > 1) grow = 1;
@@ -66,19 +63,21 @@ static void pixel_pass(GContext *ctx, const Layout *L, uint16_t t) {
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return;
   const int16_t *top = scene_ridge_rows(), *bot = scene_berm_rows();
+  const Theme *th = scene_theme();
   int W = L->W;
-  uint8_t src[W];
+  uint8_t src[W], streak[AV_MAX_S];   // streaks rebuilt per frame: basalt has no heap for a static table
+  aval_streaks(streak);
   for (int y = 0; y < L->comp_top; y++) {
     uint8_t *row = fb_row(fb, y);
     scene_bg_row(y, src, W);
     for (int x = 0; x < W; x++) {
       if (y < top[x] || y >= bot[x]) continue;
-      switch (aval_pixel(&s_A, s_streak, L->k, x, y, t)) {
-        case AV_SHADOW:  row[x] = SCENE_ROLE(snow_shadow).argb; break;
+      switch (aval_pixel(&s_A, streak, L->k, x, y, t)) {
+        case AV_SHADOW:  row[x] = th->snow_shadow; break;
         case AV_RESTORE: row[x] = src[x]; break;
-        case AV_WHITE:   row[x] = SCENE_ROLE(powder).argb; break;
-        case AV_CELESTE: row[x] = SCENE_ROLE(snow_shade).argb; break;
-        case AV_BLUE:    row[x] = SCENE_ROLE(snow_shadow).argb; break;
+        case AV_WHITE:   row[x] = th->powder; break;
+        case AV_CELESTE: row[x] = th->snow_shade; break;
+        case AV_BLUE:    row[x] = th->snow_shadow; break;
         default: break;
       }
     }
@@ -91,19 +90,22 @@ enum { HALO, SHADE, MID, TOP };
 
 static void back_billows(GContext *ctx, const Layout *L, float tau, bool top) {
   float k = L->k, grow = s_A.grow;
+  GColor c = top ? SCENE_ROLE(powder) : SCENE_ROLE(snow_shade);
   for (float s = L->s_min; s <= L->s_max; s += 5 * k) {
     float r = k * (2.5f + 4 * aval_noise(s * 0.17f + tau * 1.4f)) * grow;
     if (r < 0.6f) continue;
     Vec2 q = pt(aval_front(&s_A, s) - (11 + 5 * aval_noise(s * 0.09f)) * k * grow, s);
     if (!in_view(L, q)) continue;
-    if (top) disc(ctx, q.x, q.y, r * 0.82f, SCENE_ROLE(powder));
-    else disc(ctx, q.x + 0.8f * k, q.y + 1.1f * k, r, SCENE_ROLE(snow_shade));
+    if (top) disc(ctx, q.x, q.y, r * 0.82f, c);
+    else disc(ctx, q.x + 0.8f * k, q.y + 1.1f * k, r, c);
   }
 }
 
 // Leading billows: they churn forward and back as they roll. HALO needs the captured framebuffer.
 static void lead_billows(GContext *ctx, GBitmap *fb, const Layout *L, float tau, int layer) {
   float k = L->k, grow = s_A.grow;
+  const Theme *th = scene_theme();
+  GColor shade = { .argb = th->snow_shade }, shadow = { .argb = th->snow_shadow }, powder = { .argb = th->powder };
   for (float s = L->s_min - 10; s <= L->s_max + 10; s += 3.2f * k) {
     float r = k * (3.5f + 5 * aval_noise(s * 0.11f + 3.1f) + 1.8f * aval_noise(s * 0.23f + tau * 2.6f)) * grow;
     if (r < 0.6f) continue;
@@ -111,18 +113,20 @@ static void lead_billows(GContext *ctx, GBitmap *fb, const Layout *L, float tau,
     if (!in_view(L, q)) continue;
     switch (layer) {
       case HALO:
-        fb_dither_circle(fb, fb_floor(q.x), fb_floor(q.y), fb_round(r + 2 * k), SCENE_ROLE(snow_shade), 77,
+        fb_dither_circle(fb, fb_floor(q.x), fb_floor(q.y), fb_round(r + 2 * k), shade, 77,
                          scene_ridge_rows(), scene_berm_rows());
         break;
-      case SHADE: disc(ctx, q.x + 0.8f * k, q.y + 1.2f * k, r, SCENE_ROLE(snow_shadow)); break;
-      case MID:   disc(ctx, q.x + 0.3f * k, q.y + 0.5f * k, r * 0.95f, SCENE_ROLE(snow_shade)); break;
-      default:    disc(ctx, q.x - 0.4f * k, q.y - 0.5f * k, r * 0.8f, SCENE_ROLE(powder)); break;
+      case SHADE: disc(ctx, q.x + 0.8f * k, q.y + 1.2f * k, r, shadow); break;
+      case MID:   disc(ctx, q.x + 0.3f * k, q.y + 0.5f * k, r * 0.95f, shade); break;
+      default:    disc(ctx, q.x - 0.4f * k, q.y - 0.5f * k, r * 0.8f, powder); break;
     }
   }
 }
 
 static void vector_pass(GContext *ctx, const Layout *L, uint16_t t) {
   float k = L->k, tau = t / 1000.0f, grow = s_A.grow, span = L->s_max - L->s_min;
+  const Theme *th = scene_theme();
+  GColor shade = { .argb = th->snow_shade }, shadow = { .argb = th->snow_shadow }, powder = { .argb = th->powder };
   back_billows(ctx, L, tau, false);   // second rank of billows, riding on the moving snow
   back_billows(ctx, L, tau, true);
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
@@ -142,16 +146,16 @@ static void vector_pass(GContext *ctx, const Layout *L, uint16_t t) {
     if (!in_view(L, q)) continue;
     float hop = fabsf_(geom_sin(tau * 9 + m * 1.7f)) * 2.5f * k;
     int qx = fb_round(q.x), qy = fb_round(q.y), hy = fb_round(q.y - hop);
-    dot(ctx, qx, qy + 1, cs, 1, SCENE_ROLE(snow_shadow));
-    dot(ctx, qx, hy - cs + 1, cs, cs, SCENE_ROLE(powder));
-    dot(ctx, qx + cs - 1, hy, 1, 1, SCENE_ROLE(snow_shade));
+    dot(ctx, qx, qy + 1, cs, 1, shadow);
+    dot(ctx, qx, hy - cs + 1, cs, cs, powder);
+    dot(ctx, qx + cs - 1, hy, 1, 1, shade);
   }
   // Loose snow sparkling just ahead of the front.
   uint32_t fr = (uint32_t)(tau * 14);
   for (int m = 0; m < 70; m++) {
     float s = L->s_min + H37[m] / 256.0f * span;
     Vec2 q = pt(aval_front(&s_A, s) + hash2(m, fr) * 9 * k * grow, s);
-    dot(ctx, fb_round(q.x), fb_round(q.y), 1, 1, m % 3 ? SCENE_ROLE(snow_shadow) : GColorLightGray);
+    dot(ctx, fb_round(q.x), fb_round(q.y), 1, 1, m % 3 ? shadow : GColorLightGray);
   }
 }
 

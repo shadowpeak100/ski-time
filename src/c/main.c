@@ -44,6 +44,9 @@ static void render_frame(GContext *ctx, const Frame *f) {
     if (st.visible && st.idx > s->s_idx) sprites_track(ctx, s, s->s_idx, st.idx, ts);
   }
   scene_draw_chalet(ctx, L);
+#ifdef PBL_PLATFORM_EMERY
+  if (scene_theme()->night) scene_draw_campfire(ctx, L, s_smoke_ms);
+#endif
   scene_draw_smoke(ctx, L, s_smoke_ms);
   comps_draw(ctx, L);
   if (f->old && f->t < 1500)
@@ -250,7 +253,6 @@ static void window_load(Window *w) {
   layout_init(&s_L, bounds.size.w, bounds.size.h);
   s_scene_ok = scene_init(&s_L);
   apply_theme();
-  aval_draw_init();
   build_skiers();
   s_layer = layer_create(bounds);
   layer_set_update_proc(s_layer, update);

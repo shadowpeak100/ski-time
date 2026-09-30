@@ -3,8 +3,9 @@
 #include "fb.h"
 #include "geom.h"
 #include "avalanche.h"
+#include "flood.h"
+#include "decor.h"
 
-#define SLOPE_PTS 110
 #define MAX_TREES 40
 
 // Background packed at 4 bits per pixel (low nibble = even x) with a palette of up to 16 GColor8
@@ -202,6 +203,59 @@ static void shade_pass(GContext *ctx, const Layout *L) {
   graphics_release_frame_buffer(ctx, fb);
 }
 
+#ifdef PBL_PLATFORM_EMERY   // basalt has no heap left for the night extras' code
+// Night: window light spilled on the snow in front of the chalet, then the floodlight cones over the open slope.
+static void night_pass(GContext *ctx, const Layout *L, const FloodHead *heads) {
+  int W = L->W;
+  float k = L->k, cb = L->chalet.y + L->chalet.h, cx = L->chalet.x, cw = L->chalet.w;
+  GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  if (!fb) return;
+  for (int y = fb_round(cb - 1); y < cb + 5 * k && y < L->H; y++)
+    for (int x = fb_round(cx - 6 * k); x < cx + cw * 0.6f && x < W; x++) {
+      float ax = x - (cx + cw * 0.2f), p = 0.5f * (1 - (y - cb) / (5 * k)) * (1 - (ax < 0 ? -ax : ax) / (cw * 0.55f));
+      if (x >= 0 && p > 0 && dith(x, y, p)) fb_row(fb, y)[x] = C8(0xFFFFAA);
+    }
+  for (int x = 0; x < W; x++)
+    for (int y = iceil(layout_ridge_y(L, x) + 1); y < s_berm_rows[x]; y++) {
+      float I = flood_at(heads, FLOOD_COUNT, k, x + 0.5f, y + 0.5f) * 1.3f;
+      if (I <= 0) continue;
+      int b = aval_bayer(x, y) * 16 + 8;
+      if (b < (I - 0.68f) * 256) fb_row(fb, y)[x] = C8(0xFFFFAA);
+      else if (b < I * 256) fb_row(fb, y)[x] = C8(0xFFFFFF);
+    }
+  graphics_release_frame_buffer(ctx, fb);
+}
+
+// Pole, foot, and a lamp housing tipped toward its aim with the lit face on the aimed side.
+static void flood_poles(GContext *ctx, const FloodHead *heads) {
+  for (int i = 0; i < FLOOD_COUNT; i++) {
+    const FloodHead *f = &heads[i];
+    int bx = fb_round(f->bx), by = fb_round(f->by), hx = fb_round(f->hx), hy = fb_round(f->hy), sx = f->dx < 0 ? -1 : 1;
+    rect(ctx, bx, hy + 1, 1, by - hy, GColorOxfordBlue);
+    rect(ctx, bx - 1, by - 1, 3, 1, GColorOxfordBlue);
+    rect(ctx, hx - (sx < 0 ? 2 : 0), hy - 1, 3, 3, GColorOxfordBlue);
+    rect(ctx, hx + 3 * sx, hy - 1, 1, 3, GColorIcterine);
+    rect(ctx, hx + 4 * sx, hy, 1, 1, GColorPastelYellow);
+  }
+}
+
+// Open-slope pines, back to front by base, each on its own shadow.
+static void slope_trees(GContext *ctx) {
+  uint8_t ord[SLOPE_TREE_COUNT];
+  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
+    int j = i;
+    for (; j > 0 && SLOPE_TREES[ord[j - 1]].base > SLOPE_TREES[i].base; j--) ord[j] = ord[j - 1];
+    ord[j] = (uint8_t)i;
+  }
+  GColor shade = SCENE_ROLE(snow_shade);
+  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
+    const SlopeTree *t = &SLOPE_TREES[ord[i]];
+    fb_fill_ellipse(ctx, t->x + 2, t->base, t->h * 0.42f, 1.6f, shade);
+    pine(ctx, t->x, t->base, t->h);
+  }
+}
+#endif
+
 static uint8_t pal_index(uint8_t c) {
   for (uint8_t i = 0; i < s_npal; i++) if (s_pal[i] == c) return i;
   if (s_npal < 16) { s_pal[s_npal] = c; return s_npal++; }
@@ -257,7 +311,7 @@ static bool build_bg(GContext *ctx, const Layout *L) {
     pine(ctx, x, base, h < base - 2 ? h : base - 2);
   }
 
-  static GPoint slope[SLOPE_PTS];
+  GPoint *slope = (GPoint *)s_bg;   // s_bg is free scratch until the pack below; basalt has no RAM for a static copy
   int n = 0;
   slope[n++] = GPoint(-2, fb_floor(layout_ridge_y(L, 0)));
   for (int i = 0; i <= (W + 1) / 2; i++) slope[n++] = GPoint(i * 2, fb_floor(layout_ridge_y(L, i * 2)));
@@ -267,6 +321,14 @@ static bool build_bg(GContext *ctx, const Layout *L) {
   fb_fill_poly(ctx, slope, (uint16_t)n, gcol(th->snow));
 
   shade_pass(ctx, L);
+#ifdef PBL_PLATFORM_EMERY
+  if (th->night) {
+    FloodHead heads[FLOOD_COUNT];
+    flood_heads(W, H, k, heads);
+    night_pass(ctx, L, heads);
+    flood_poles(ctx, heads);
+  }
+#endif
 
   float trees[MAX_TREES][3];
   int nt = 0;
@@ -280,12 +342,14 @@ static bool build_bg(GContext *ctx, const Layout *L) {
     trees[j][0] = tx; trees[j][1] = base; trees[j][2] = h;
   }
   for (int i = 0; i < nt; i++) pine(ctx, trees[i][0], trees[i][1], trees[i][2]);
+#ifdef PBL_PLATFORM_EMERY
+  if (W >= 200) slope_trees(ctx);
+#endif
 
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return false;
   for (int y = 0; y < H; y++) pack_row(fb_row(fb, y), s_bg + y * s_stride, W);
   graphics_release_frame_buffer(ctx, fb);
-  APP_LOG(APP_LOG_LEVEL_INFO, "bg palette %d colours", s_npal);
   return true;
 }
 
@@ -353,9 +417,11 @@ void scene_draw_chalet(GContext *ctx, const Layout *L) {
   float ey = c.y + c.h * 0.5f, ax = fx0 + fw / 2, ay = c.y + c.h * 0.06f;
 #define UP(x) (rise * ((x) - fx1) / run)
   graphics_context_set_antialiased(ctx, false);
+  const Theme *th = scene_theme();
+  const GColor powder = gcol(th->powder), shade = gcol(th->snow_shade);
 
   pine(ctx, ex - 3 * k, b - rise - c.h * 0.25f, c.h * 0.9f);
-  fill_rot_ellipse(ctx, fx1 + run * 0.55f, b - rise * 0.4f + 1, c.w * 0.42f, 2.5f * k, -0.1f, SCENE_ROLE(snow_shade));
+  fill_rot_ellipse(ctx, fx1 + run * 0.55f, b - rise * 0.4f + 1, c.w * 0.42f, 2.5f * k, -0.1f, shade);
 
   // side wall in shade, glowing windows
   const float wall[8] = { fx1, ey, ex, ey - rise, ex, b - rise, fx1, b };
@@ -391,41 +457,42 @@ void scene_draw_chalet(GContext *ctx, const Layout *L) {
   // side roof plane under snow, with eave band, fascia and icicles
   float o = 2 * k;
   const float roof[8] = { ax, ay, ax + run, ay - rise, ex + o, ey - rise + o, fx1 + o, ey + o };
-  poly(ctx, roof, 4, SCENE_ROLE(powder));
+  poly(ctx, roof, 4, powder);
   const float eave[8] = { fx1 + o, ey + o, ex + o, ey - rise + o, ex + o, ey - rise + o - 2.5f * k, fx1 + o, ey + o - 2.5f * k };
-  poly(ctx, eave, 4, SCENE_ROLE(snow_shade));
+  poly(ctx, eave, 4, shade);
   // 1-px fascia band [edge, edge+1): the row whose centre falls inside it, per column
   for (int x = fb_floor(fx1 + o); x < fb_round(ex + o); x++) {
     float edge = ey + o - rise * (x + 0.5f - (fx1 + o)) / run;
     rect(ctx, x, iceil(edge - 0.5f), 1, 1, GColorBulgarianRose);
   }
   for (float x = fx1 + o + 2 * k; x < ex; x += 3 * k)
-    rect(ctx, fb_round(x), fb_round(ey + o + 1 - UP(x)), 1, 1 + ((int)(x * 7) % 2), SCENE_ROLE(snow_shade));
+    rect(ctx, fb_round(x), fb_round(ey + o + 1 - UP(x)), 1, 1 + ((int)(x * 7) % 2), shade);
 
   // front bargeboards with snow
   const float ends[2][2] = { { fx0 - o, ey + o }, { fx1 + o, ey + o } };
   for (int i = 0; i < 2; i++) {
     capsule(ctx, ax, ay, ends[i][0], ends[i][1], 2 * k, GColorBulgarianRose);
-    capsule(ctx, ax, ay - k, ends[i][0], ends[i][1] - 1.2f * k, 1.4f * k, SCENE_ROLE(powder));
+    capsule(ctx, ax, ay - k, ends[i][0], ends[i][1] - 1.2f * k, 1.4f * k, powder);
   }
 
   // chimney on the side roof
   float cx = ax + run * 0.62f, cy = ay - rise * 0.62f + (ey - ay) * 0.3f;
   rect(ctx, fb_round(cx - 1.5f * k), fb_round(cy - 6 * k), fb_round(3 * k), fb_round(7 * k), GColorDarkGray);
-  rect(ctx, fb_round(cx - 2 * k), fb_round(cy - 6 * k - 1), fb_round(4 * k), 2, SCENE_ROLE(powder));
+  rect(ctx, fb_round(cx - 2 * k), fb_round(cy - 6 * k - 1), fb_round(4 * k), 2, powder);
   s_chim_x = cx; s_chim_y = cy - 6 * k - 2;
 #undef UP
 }
 
 void scene_draw_smoke(GContext *ctx, const Layout *L, uint32_t ms) {
   float k = L->k, clock = ms / 1000.0f;
+  GColor shade = SCENE_ROLE(snow_shade);
   for (int i = 0; i < 4; i++) {
     float p = clock * 0.22f + i / 4.0f;
     p -= fb_floor(p);
     if (p > 0.9f) continue;
     float r = (0.8f + p * 2.4f) * k;
     fb_fill_ellipse(ctx, s_chim_x + p * 8 * k + geom_sin(p * 6 + i) * 1.2f * k, s_chim_y - p * 16 * k, r, r,
-                    p < 0.45f ? GColorLightGray : SCENE_ROLE(snow_shade));
+                    p < 0.45f ? GColorLightGray : shade);
   }
 }
 
@@ -451,3 +518,78 @@ void scene_restore_outside_slope(GContext *ctx, const Layout *L) {
   }
   graphics_release_frame_buffer(ctx, fb);
 }
+
+#ifdef PBL_PLATFORM_EMERY
+// Bayer-dithered ellipse at density p, pixel-centre spans as fb_fill_ellipse.
+static void dither_ellipse(GBitmap *fb, int W, int H, float cx, float cy, float rx, float ry, Col8 c, float p) {
+  for (int y = fb_floor(cy - ry); y <= fb_floor(cy + ry); y++) {
+    float dy = (y + 0.5f - cy) / ry;
+    if (y < 0 || y >= H || dy * dy > 1) continue;
+    float hw = rx * geom_sqrt(1 - dy * dy);
+    uint8_t *row = fb_row(fb, y);
+    for (int x = fb_round(cx - hw); x < fb_round(cx + hw); x++)
+      if (x >= 0 && x < W && dith(x, y, p)) row[x] = c;
+  }
+}
+
+// One flame tongue: two quadratic curves from the base corners up to a swaying tip, filled at pixel centres
+// (each row crosses the outline once on each side).
+#define TONGUE_SEGS 6
+static void tongue(GContext *ctx, float x, float y, float h, float sway, float s, float k, GColor c) {
+  float px[2 * TONGUE_SEGS + 1], py[2 * TONGUE_SEGS + 1];
+  float w = 1.9f * k * s, cw = 1.2f * k * s, cy = y - h * 0.6f * s, ty = y - h * s;
+  for (int i = 0; i <= TONGUE_SEGS; i++) {
+    float t = (float)i / TONGUE_SEGS, m = 1 - t, a = m * m, b = 2 * m * t, d = t * t;
+    px[i] = a * (x - w) + b * (x - cw) + d * (x + sway);
+    py[i] = a * y + b * cy + d * ty;
+    px[TONGUE_SEGS + i] = a * (x + sway) + b * (x + cw) + d * (x + w);
+    py[TONGUE_SEGS + i] = a * ty + b * cy + d * y;
+  }
+  graphics_context_set_fill_color(ctx, c);
+  for (int row = fb_floor(ty); row <= fb_floor(y); row++) {
+    float yc = row + 0.5f, lo = 1e9f, hi = -1e9f;
+    for (int i = 0; i < 2 * TONGUE_SEGS; i++) {
+      float y0 = py[i], y1 = py[i + 1];
+      if ((y0 <= yc) == (y1 <= yc)) continue;
+      float xc = px[i] + (yc - y0) * (px[i + 1] - px[i]) / (y1 - y0);
+      if (xc < lo) lo = xc;
+      if (xc > hi) hi = xc;
+    }
+    if (hi < lo) continue;
+    int16_t x0 = fb_round(lo), x1 = fb_round(hi);
+    if (x1 > x0) graphics_fill_rect(ctx, GRect(x0, row, x1 - x0, 1), 0, GCornerNone);
+  }
+}
+
+void scene_draw_campfire(GContext *ctx, const Layout *L, uint32_t ms) {
+  float k = L->k, clock = ms / 1000.0f, fx = L->chalet.x - 9 * k, fy = L->comp_top - 5 * k;
+  graphics_context_set_antialiased(ctx, false);
+  GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  if (!fb) return;
+  dither_ellipse(fb, L->W, L->H, fx, fy, 10 * k, 3.2f * k, C8(0xFFAA55), 0.35f);
+  dither_ellipse(fb, L->W, L->H, fx, fy, 5 * k, 1.8f * k, C8(0xFFFFAA), 0.3f);
+  graphics_release_frame_buffer(ctx, fb);
+
+  graphics_context_set_stroke_color(ctx, GColorBulgarianRose);
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(fb_floor(fx - 4 * k), fb_floor(fy)), GPoint(fb_floor(fx + 4 * k), fb_floor(fy - 1.5f * k)));
+  graphics_draw_line(ctx, GPoint(fb_floor(fx - 4 * k), fb_floor(fy - 1.5f * k)), GPoint(fb_floor(fx + 4 * k), fb_floor(fy)));
+
+  static const uint8_t flame[4] = { C8(0xFF0000), C8(0xFF5500), C8(0xFFAA00), C8(0xFFFF55) };
+  static const float scale[4] = { 1, 0.72f, 0.46f, 0.24f };
+  for (int i = 0; i < 3; i++) {
+    float ox = (i - 1) * 1.8f * k, h = (5 + 2.4f * aval_noise(clock * 6 + i * 2.1f)) * k * (i == 1 ? 1.3f : 0.85f);
+    float sw = geom_sin(clock * 9 + i * 1.7f) * 0.9f * k;
+    for (int j = 0; j < (i == 1 ? 4 : 3); j++)
+      tongue(ctx, fx + ox, fy - 0.8f * k, h, sw, scale[j], k, gcol(flame[j]));
+  }
+  for (float x = fx - 5 * k; x <= fx + 5 * k; x += 2.5f * k) rect(ctx, fb_round(x), fb_round(fy), 1, 1, GColorDarkGray);
+  for (int i = 0; i < 3; i++) {
+    float q = clock * 0.8f + i / 3.0f;
+    q -= fb_floor(q);
+    if (q > 0.8f) continue;
+    rect(ctx, fb_round(fx + geom_sin(q * 9 + i) * 2 * k), fb_round(fy - 7 * k - q * 10 * k), 1, 1,
+         q < 0.45f ? GColorChromeYellow : GColorOrange);
+  }
+}
+#endif
