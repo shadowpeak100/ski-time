@@ -215,13 +215,26 @@ static void night_pass(GContext *ctx, const Layout *L, const FloodHead *heads) {
       float ax = x - (cx + cw * 0.2f), p = 0.5f * (1 - (y - cb) / (5 * k)) * (1 - (ax < 0 ? -ax : ax) / (cw * 0.55f));
       if (x >= 0 && p > 0 && dith(x, y, p)) fb_row(fb, y)[x] = C8(0xFFFFAA);
     }
-  for (int x = 0; x < W; x++)
-    for (int y = iceil(layout_ridge_y(L, x) + 1); y < s_berm_rows[x]; y++) {
-      float I = flood_at(heads, FLOOD_COUNT, k, x + 0.5f, y + 0.5f) * 1.3f;
-      if (I <= 0) continue;
-      int b = aval_bayer(x, y) * 16 + 8;
-      if (b < (I - 0.68f) * 256) fb_row(fb, y)[x] = C8(0xFFFFAA);
-      else if (b < I * 256) fb_row(fb, y)[x] = C8(0xFFFFFF);
+  int16_t ylo[W];
+  for (int x = 0; x < W; x++) ylo[x] = iceil(layout_ridge_y(L, x) + 1);
+  for (int x0 = 0; x0 < W; x0 += 2)       // flood intensity is sampled once per 2x2 block; the dither hides it
+    for (int y0 = 0; y0 < L->H; y0 += 2) {
+      int cream = 0, white = 0;   // dither thresholds, valid once evaluated
+      bool evaluated = false;
+      for (int x = x0; x < x0 + 2 && x < W; x++) {
+        int yhi = s_berm_rows[x];
+        for (int y = y0 > ylo[x] ? y0 : ylo[x]; y < y0 + 2 && y < yhi; y++) {
+          if (!evaluated) {
+            float I = flood_at(heads, FLOOD_COUNT, k, x0 + 1.0f, y0 + 1.0f) * 1.3f;
+            evaluated = true;
+            if (I > 0) { cream = iceil((I - 0.68f) * 256); white = iceil(I * 256); }
+          }
+          if (white <= 0) break;
+          int b = aval_bayer(x, y) * 16 + 8;
+          if (b < cream) fb_row(fb, y)[x] = C8(0xFFFFAA);
+          else if (b < white) fb_row(fb, y)[x] = C8(0xFFFFFF);
+        }
+      }
     }
   graphics_release_frame_buffer(ctx, fb);
 }
@@ -376,13 +389,14 @@ void scene_deinit(void) {
 
 void scene_invalidate(void) { s_bg_valid = false; }
 
-void scene_blit(GContext *ctx, const Layout *L) {
-  if (!s_bg) return;
-  if (!s_bg_valid) { s_bg_valid = build_bg(ctx, L); return; }
+bool scene_blit(GContext *ctx, const Layout *L) {
+  if (!s_bg) return false;
+  if (!s_bg_valid) { s_bg_valid = build_bg(ctx, L); return true; }
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
-  if (!fb) return;
+  if (!fb) return false;
   for (int y = 0; y < L->H; y++) unpack_row(s_bg + y * s_stride, fb_row(fb, y), L->W);
   graphics_release_frame_buffer(ctx, fb);
+  return false;
 }
 
 bool scene_ready(void) { return s_bg && s_bg_valid; }

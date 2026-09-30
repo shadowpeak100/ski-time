@@ -26,10 +26,11 @@ static float smooth(float t) { return t * t * (3 - 2 * t); }
 float flood_at(const FloodHead *h, int n, float k, float x, float y) {
   float best = 0, len = LEN * k;
   for (int i = 0; i < n; i++) {
-    float vx = x - h[i].hx, vy = y - h[i].hy, d = geom_sqrt(vx * vx + vy * vy);
-    if (d > len || d < 1) continue;
-    float c = (vx * h[i].dx + vy * h[i].dy) / d;
-    if (c <= COSH) continue;
+    float vx = x - h[i].hx, vy = y - h[i].hy, d2 = vx * vx + vy * vy;
+    if (d2 > len * len || d2 < 1) continue;           // reject on squared values: sqrt is the slow part
+    float dot = vx * h[i].dx + vy * h[i].dy;
+    if (dot <= 0 || dot * dot <= COSH * COSH * d2) continue;
+    float d = geom_sqrt(d2), c = dot / d;
     float edge = smooth(clamp01((c - COSH) / (1 - COSH) * 2.2f));
     float f = 1 - d / len, f75 = geom_sqrt(f) * geom_sqrt(geom_sqrt(f));
     float fall = 0.5f * (f + f75);                       // f^0.85 without libm

@@ -30,16 +30,17 @@ static SkPt *s_pool_a, *s_pool_b;
 static SkierSet *s_old, *s_new;
 static bool s_anim;
 static uint32_t s_anim_start_ms;
+static bool s_anim_first_frame;   // the first frame may include a slow background rebuild
 static AppTimer *s_anim_timer;
 static uint16_t s_sun_rise = 420, s_sun_set = 1140;   // phone data, minutes of day
 static float s_moon;                                  // phase for the cached date
 static int s_moon_yday = -1;
 #define ANIM_FRAME_MS 40
 
-static void render_frame(GContext *ctx, const Frame *f) {
+static bool render_frame(GContext *ctx, const Frame *f) {   // true if the background was rebuilt
   const Layout *L = &s_L;
   TrackStyle ts = s_track_style;
-  scene_blit(ctx, L);
+  bool rebuilt = scene_blit(ctx, L);
   if (f->old && f->t < AV_FLOW_END_MS + AV_FADE_MS)
     for (uint8_t i = 0; i < f->old->count; i++) sprites_track(ctx, &f->old->sk[i], f->old->sk[i].s_idx, f->old->sk[i].n - 1, ts);
   if (f->old) aval_draw(ctx, L, f->t);
@@ -68,6 +69,7 @@ static void render_frame(GContext *ctx, const Frame *f) {
 #ifdef PBL_PLATFORM_EMERY
   scene_draw_slope_trees(ctx, L);
 #endif
+  return rebuilt;
 }
 
 static void now_hm(int *h, int *m) {
@@ -169,6 +171,7 @@ static void anim_start(void) {
   s_new = target;
   s_anim = true;
   s_anim_start_ms = now_ms();
+  s_anim_first_frame = true;
   s_smoke_ms = s_smoke_base;
 #ifndef MOCK_ANIM_MS
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, anim_timer_cb, NULL);
@@ -252,7 +255,11 @@ static void update(Layer *layer, GContext *ctx) {
   s_smoke_ms = s_smoke_base + el;
   Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
 #endif
-  render_frame(ctx, &f);
+  bool rebuilt = render_frame(ctx, &f);
+#ifndef MOCK_ANIM_MS
+  if (s_anim && s_anim_first_frame && rebuilt) s_anim_start_ms = now_ms();   // do not skip the start of the animation
+  s_anim_first_frame = false;
+#endif
 }
 
 static void build_skiers(void) {

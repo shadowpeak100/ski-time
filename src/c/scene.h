@@ -13,7 +13,7 @@ void scene_deinit(void);
 void scene_set_theme(const Theme *t, float moon_phase);   // rebuilds the background if either changed
 const Theme *scene_theme(void);
 void scene_invalidate(void);                      // rebuild the background on next draw
-void scene_blit(GContext *ctx, const Layout *L);  // builds the background if needed, then copies it to the framebuffer
+bool scene_blit(GContext *ctx, const Layout *L);  // builds the background if needed, else copies it to the framebuffer; true if it had to build
 bool scene_ready(void);                           // background built and available
 bool scene_bg_row(int y, uint8_t *out, int W);    // unpacks background row y (W GColor8 bytes); false if not built
 const int16_t *scene_ridge_rows(void);            // first slope row per column (ceil(ridge+0.5))
