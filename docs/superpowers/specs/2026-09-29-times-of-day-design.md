@@ -104,10 +104,11 @@ Exact values per phase are copied from the prototype's `THEMES` (hex values in 6
   - three flame tongues in red, orange, chrome yellow and a yellow core, plus sparks
   - it animates from the same continuous phase clock as the smoke, so it moves only while the face redraws
 - **Slope trees (Emery only, every phase):** 9 pines, each given as (x, base, height) and drawn back to front, each with a `snowShade` ellipse shadow `(x+2, base, 0.42h × 1.6)`:
-  - (50, 80, 16), (41, 86, 16), (30, 100, 16), (24, 109, 9)
-  - (180, 132, 10)
-  - (40, 95, 8), (83, 191, 7), (100, 190, 8), (114, 190, 10)
-  - A host test pins that no skier path, stop or ski-out point, over every minute and all 4 clock formats, comes within 5 px of any tree's rectangle including its shadow. It also checks the trees stay clear of the digit boxes, chalet, strip and poles.
+  - (50, 80, 16), (41, 86, 16), (30, 100, 16), (38, 104, 9)
+  - (180, 117, 10)
+  - (46, 99, 8), (32, 152, 12), (96, 136, 9), (153, 129, 11)
+  - The trees are drawn each frame over the skiers, not into the stored background, so a skier higher up the slope passes behind a tree's canopy. A skier's feet never touch a tree's base: no feet point lies within 3 px of the tree's half-width `ceil(0.42h)` across, from 2 px above the base to 9 px below it.
+  - A host test pins that base rule for every skier path, stop and ski-out point, over every minute and all 4 clock formats. It also checks that no tree covers any digit stroke of any slot (2 px margin), and that the trees stay clear of the ridge, chalet, strip, poles (6 px), each other (8 px) and the chimney smoke plume.
 
 ## 5. Data from the phone
 

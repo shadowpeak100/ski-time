@@ -239,21 +239,6 @@ static void flood_poles(GContext *ctx, const FloodHead *heads) {
   }
 }
 
-// Open-slope pines, back to front by base, each on its own shadow.
-static void slope_trees(GContext *ctx) {
-  uint8_t ord[SLOPE_TREE_COUNT];
-  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
-    int j = i;
-    for (; j > 0 && SLOPE_TREES[ord[j - 1]].base > SLOPE_TREES[i].base; j--) ord[j] = ord[j - 1];
-    ord[j] = (uint8_t)i;
-  }
-  GColor shade = SCENE_ROLE(snow_shade);
-  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
-    const SlopeTree *t = &SLOPE_TREES[ord[i]];
-    fb_fill_ellipse(ctx, t->x + 2, t->base, t->h * 0.42f, 1.6f, shade);
-    pine(ctx, t->x, t->base, t->h);
-  }
-}
 #endif
 
 static uint8_t pal_index(uint8_t c) {
@@ -342,9 +327,6 @@ static bool build_bg(GContext *ctx, const Layout *L) {
     trees[j][0] = tx; trees[j][1] = base; trees[j][2] = h;
   }
   for (int i = 0; i < nt; i++) pine(ctx, trees[i][0], trees[i][1], trees[i][2]);
-#ifdef PBL_PLATFORM_EMERY
-  if (W >= 200) slope_trees(ctx);
-#endif
 
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (!fb) return false;
@@ -590,6 +572,26 @@ void scene_draw_campfire(GContext *ctx, const Layout *L, uint32_t ms) {
     if (q > 0.8f) continue;
     rect(ctx, fb_round(fx + geom_sin(q * 9 + i) * 2 * k), fb_round(fy - 7 * k - q * 10 * k), 1, 1,
          q < 0.45f ? GColorChromeYellow : GColorOrange);
+  }
+}
+#endif
+
+#ifdef PBL_PLATFORM_EMERY
+// Open-slope pines, back to front by base, each on its own shadow; drawn over the skiers so they pass behind.
+void scene_draw_slope_trees(GContext *ctx, const Layout *L) {
+  (void)L;
+  graphics_context_set_antialiased(ctx, false);
+  uint8_t ord[SLOPE_TREE_COUNT];
+  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
+    int j = i;
+    for (; j > 0 && SLOPE_TREES[ord[j - 1]].base > SLOPE_TREES[i].base; j--) ord[j] = ord[j - 1];
+    ord[j] = (uint8_t)i;
+  }
+  GColor shade = SCENE_ROLE(snow_shade);
+  for (int i = 0; i < SLOPE_TREE_COUNT; i++) {
+    const SlopeTree *t = &SLOPE_TREES[ord[i]];
+    fb_fill_ellipse(ctx, t->x + 2, t->base, t->h * 0.42f, 1.6f, shade);
+    pine(ctx, t->x, t->base, t->h);
   }
 }
 #endif

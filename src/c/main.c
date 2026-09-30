@@ -65,6 +65,9 @@ static void render_frame(GContext *ctx, const Frame *f) {
     sprites_skier(ctx, st.x, st.y, st.h, f->neu->sk[i].color, L->k);
     if (st.spray) sprites_spray(ctx, st.x, st.y, st.h, st.spray, L->k);
   }
+#ifdef PBL_PLATFORM_EMERY
+  scene_draw_slope_trees(ctx, L);
+#endif
 }
 
 static void now_hm(int *h, int *m) {

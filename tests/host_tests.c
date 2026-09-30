@@ -355,33 +355,69 @@ static void test_flood_coverage(void) {
   CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 230, fh[0].hy + fh[0].dy * 230) == 0); // past the end of its cone
   CHECK(flood_at(fh, 1, L.k, fh[0].hx + fh[0].dx * 60, fh[0].hy + fh[0].dy * 60) > 0.5f); // bright along its axis
 }
+// Tree sprite box (x0..x1, y0..y1) and the base band skier feet must not touch.
+typedef struct { int hw, x0, x1, y0, y1; } TreeBox;
+static TreeBox tree_box(const SlopeTree *t) {
+  int hw = (t->h * 42 + 99) / 100;
+  return (TreeBox){ hw, t->x - hw, t->x + hw + 2, t->base - t->h, t->base + 1 };
+}
+static bool feet_hit_base(const SlopeTree *t, float x, float y) {
+  int hw = tree_box(t).hw;
+  return x >= t->x - hw - 3 && x <= t->x + hw + 3 && y >= t->base - 2 && y <= t->base + 9;
+}
+static void chimney_pos(const Layout *L, float *x, float *y) {   // as scene_draw_chalet computes it
+  Rect16 c = L->chalet;
+  float fw = c.w * 0.52f, run = c.w - fw, rise = c.h * 0.1f, ax = c.x + fw / 2, ay = c.y + c.h * 0.06f, ey = c.y + c.h * 0.5f;
+  *x = ax + run * 0.62f;
+  *y = ay - rise * 0.62f + (ey - ay) * 0.3f - 6 * L->k - 2;
+}
+typedef struct { const Layout *L; uint8_t slot; } SlotCtx;
+static Vec2 slot_map(float u, float v, const void *c) { const SlotCtx *s = c; return layout_glyph_point(s->L, s->slot, u, v); }
+
 static void test_slope_trees_clear(void) {
   Layout L; layout_init(&L, 200, 228);
-  static SkPt pool[2000];
-  const bool fm[4][2] = { {true,true}, {true,false}, {false,true}, {false,false} };
+  FloodHead fh[FLOOD_COUNT]; flood_heads(200, 228, L.k, fh);
+  float chx, chy; chimney_pos(&L, &chx, &chy);
+  static Vec2 st[4000];
   for (int t = 0; t < SLOPE_TREE_COUNT; t++) {                  // static obstacles
     const SlopeTree *tr = &SLOPE_TREES[t];
-    int hw = (tr->h * 42 + 99) / 100, x0 = tr->x - hw, x1 = tr->x + hw + 2, y0 = tr->base - tr->h, y1 = tr->base + 1;
-    CHECK(y1 < L.comp_top - 3);
-    CHECK(tr->base - tr->h >= layout_ridge_y(&L, tr->x) + 6);
-    CHECK(!(x1 >= L.chalet.x - 22 && y1 >= L.chalet.y - 14));
-    for (int b = 0; b < 4; b++) CHECK(x1 < L.boxes[b].x - 4 || x0 > L.boxes[b].x + L.gw + 4 ||
-                                      y1 < L.boxes[b].y || y0 > L.boxes[b].y + L.gh);
-    (void)x0;
+    TreeBox b = tree_box(tr);
+    CHECK(b.y1 < L.comp_top - 3);
+    CHECK(b.y0 >= layout_ridge_y(&L, tr->x) + 6);
+    CHECK(b.x1 < L.chalet.x - 22 || b.y1 < L.chalet.y - 14);
+    for (int f = 0; f < FLOOD_COUNT; f++)
+      CHECK(fh[f].bx <= b.x0 - 6 || fh[f].bx >= b.x1 + 6 || fh[f].by <= b.y0 - 6 || fh[f].hy >= b.y1 + 6);
+    for (int u = 0; u < t; u++) {
+      const SlopeTree *o = &SLOPE_TREES[u];
+      CHECK(abs(o->base - tr->base) > 12 || abs(o->x - tr->x) >= 8);
+    }
+    CHECK(b.x1 < chx - 4 || b.x0 > chx + 12 || b.y1 < chy - 20 || b.y0 > chy + 2);   // smoke plume
+    bool covers = false;
+    for (uint8_t slot = 0; slot < 4; slot++) for (uint8_t d = 0; d < 10; d++)
+      for (uint8_t j = 0; j < glyph_stroke_count(d); j++) {
+        GlyphStroke g = glyph_stroke(d, j);
+        SlotCtx sc = { &L, slot };
+        int n = geom_sample_chain(g.pts, g.n, slot_map, &sc, 1.0f, st, 4000);
+        for (int p = 0; p < n; p++)
+          covers |= st[p].x >= b.x0 - 2 && st[p].x <= b.x1 + 2 && st[p].y >= b.y0 - 2 && st[p].y <= b.y1 + 2;
+      }
+    CHECK(!covers);
   }
-  for (int c = 0; c < 4; c++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {
+  static SkPt pool[2000];
+  const bool fm[4][2] = { {true,true}, {true,false}, {false,true}, {false,false} };
+  for (int c = 0; c < 4; c++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {   // feet never at a trunk
     DigitSlot s[4]; uint8_t n = time_slots(h, m, fm[c][0], fm[c][1], s);
     SkierSet set; skiers_init(&set, pool, SKI_POOL_CAP(200)); skiers_build(&set, &L, s, n);
     for (uint8_t i = 0; i < set.count; i++) {
       const Skier *sk = &set.sk[i];
       for (int t = 0; t < SLOPE_TREE_COUNT; t++) {
         const SlopeTree *tr = &SLOPE_TREES[t];
-        int hw = (tr->h * 42 + 99) / 100;
-        float x0 = tr->x - hw - 5, x1 = tr->x + hw + 2 + 5, y0 = tr->base - tr->h - 5, y1 = tr->base + 1 + 5;
-        for (uint16_t p = 0; p < sk->n; p += 2) { float x = sk->pts[p].x / 16.0f, y = sk->pts[p].y / 16.0f;
-          CHECK(!(x >= x0 && x <= x1 && y >= y0 && y <= y1)); }
+        bool hit = feet_hit_base(tr, sk->rest_pos.x, sk->rest_pos.y);
+        for (uint16_t p = 0; p < sk->n; p++) hit |= feet_hit_base(tr, sk->pts[p].x / 16.0f, sk->pts[p].y / 16.0f);
         for (uint16_t tt = 0; tt <= 1500; tt += 30) { SkierState e = skier_exit_state(sk, i, tt, L.k);
-          if (e.visible) { float x = e.x / 16.0f, y = e.y / 16.0f; CHECK(!(x >= x0 && x <= x1 && y >= y0 && y <= y1)); } }
+          if (e.visible) hit |= feet_hit_base(tr, e.x / 16.0f, e.y / 16.0f); }
+        if (hit) { fprintf(stderr, "tree %d (%d,%d,%d) hit at fmt %d %02d:%02d\n", t, tr->x, tr->base, tr->h, c, h, m);
+                   g_fail++; return; }
       }
     }
   }

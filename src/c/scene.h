@@ -21,6 +21,9 @@ const int16_t *scene_berm_rows(void);             // first strip row per column 
 void scene_draw_chalet(GContext *ctx, const Layout *L);
 void scene_draw_smoke(GContext *ctx, const Layout *L, uint32_t ms);
 void scene_draw_campfire(GContext *ctx, const Layout *L, uint32_t ms);   // night only; same clock as the smoke
+#ifdef PBL_PLATFORM_EMERY
+void scene_draw_slope_trees(GContext *ctx, const Layout *L);   // over the skiers, who pass behind them
+#endif
 void scene_restore_outside_slope(GContext *ctx, const Layout *L);   // copy bg over sky + strip rows
 
 #endif
