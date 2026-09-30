@@ -374,22 +374,34 @@ static void chimney_pos(const Layout *L, float *x, float *y) {   // as scene_dra
 typedef struct { const Layout *L; uint8_t slot; } SlotCtx;
 static Vec2 slot_map(float u, float v, const void *c) { const SlotCtx *s = c; return layout_glyph_point(s->L, s->slot, u, v); }
 
+static bool feet_behind(const SlopeTree *t, float x, float y) {   // under the canopy, above the base band
+  int hw = tree_box(t).hw;
+  return x >= t->x - hw && x <= t->x + hw + 2 && y >= t->base - t->h && y <= t->base - 3;
+}
+static bool boxes_overlap(const SlopeTree *a, const SlopeTree *b) {
+  TreeBox p = tree_box(a), q = tree_box(b);
+  return p.x0 <= q.x1 && q.x0 <= p.x1 && p.y0 <= q.y1 && q.y0 <= p.y1;
+}
+
 static void test_slope_trees_clear(void) {
   Layout L; layout_init(&L, 200, 228);
   FloodHead fh[FLOOD_COUNT]; flood_heads(200, 228, L.k, fh);
   float chx, chy; chimney_pos(&L, &chx, &chy);
   static Vec2 st[4000];
+  CHECK(SLOPE_TREE_COUNT <= 64);
   for (int t = 0; t < SLOPE_TREE_COUNT; t++) {                  // static obstacles
     const SlopeTree *tr = &SLOPE_TREES[t];
     TreeBox b = tree_box(tr);
+    if (t > 0) CHECK(SLOPE_TREES[t - 1].base <= tr->base);     // back to front
     CHECK(b.y1 < L.comp_top - 3);
-    CHECK(b.y0 >= layout_ridge_y(&L, tr->x) + 6);
+    CHECK(tr->base >= layout_ridge_y(&L, tr->x) + 4);
     CHECK(b.x1 < L.chalet.x - 22 || b.y1 < L.chalet.y - 14);
     for (int f = 0; f < FLOOD_COUNT; f++)
       CHECK(fh[f].bx <= b.x0 - 6 || fh[f].bx >= b.x1 + 6 || fh[f].by <= b.y0 - 6 || fh[f].hy >= b.y1 + 6);
     for (int u = 0; u < t; u++) {
       const SlopeTree *o = &SLOPE_TREES[u];
-      CHECK(abs(o->base - tr->base) > 12 || abs(o->x - tr->x) >= 8);
+      CHECK(abs(o->x - tr->x) >= 5 || abs(o->base - tr->base) >= 5);
+      if (boxes_overlap(o, tr)) CHECK(!(tr->base > o->base && o->behind && !tr->behind));   // static never in front of a per-frame tree
     }
     CHECK(b.x1 < chx - 4 || b.x0 > chx + 12 || b.y1 < chy - 20 || b.y0 > chy + 2);   // smoke plume
     for (int r = 0; r < 2; r++) {                                   // outside each digit row's block
@@ -405,9 +417,11 @@ static void test_slope_trees_clear(void) {
         for (int p = 0; p < n; p++)
           covers |= st[p].x >= b.x0 - 2 && st[p].x <= b.x1 + 2 && st[p].y >= b.y0 - 2 && st[p].y <= b.y1 + 2;
       }
+    if (covers) fprintf(stderr, "tree %d (%d,%d,%d) covers a digit stroke\n", t, tr->x, tr->base, tr->h);
     CHECK(!covers);
   }
   static SkPt pool[2000];
+  static bool hit[SLOPE_TREE_COUNT], behind[SLOPE_TREE_COUNT];
   const bool fm[4][2] = { {true,true}, {true,false}, {false,true}, {false,false} };
   for (int c = 0; c < 4; c++) for (int h = 0; h < 24; h++) for (int m = 0; m < 60; m++) {   // feet never at a trunk
     DigitSlot s[4]; uint8_t n = time_slots(h, m, fm[c][0], fm[c][1], s);
@@ -416,14 +430,25 @@ static void test_slope_trees_clear(void) {
       const Skier *sk = &set.sk[i];
       for (int t = 0; t < SLOPE_TREE_COUNT; t++) {
         const SlopeTree *tr = &SLOPE_TREES[t];
-        bool hit = feet_hit_base(tr, sk->rest_pos.x, sk->rest_pos.y);
-        for (uint16_t p = 0; p < sk->n; p++) hit |= feet_hit_base(tr, sk->pts[p].x / 16.0f, sk->pts[p].y / 16.0f);
+        bool was = hit[t];
+        hit[t] |= feet_hit_base(tr, sk->rest_pos.x, sk->rest_pos.y);
+        behind[t] |= feet_behind(tr, sk->rest_pos.x, sk->rest_pos.y);
+        for (uint16_t p = 0; p < sk->n; p++) {
+          float x = sk->pts[p].x / 16.0f, y = sk->pts[p].y / 16.0f;
+          hit[t] |= feet_hit_base(tr, x, y);
+          behind[t] |= feet_behind(tr, x, y);
+        }
         for (uint16_t tt = 0; tt <= 1500; tt += 30) { SkierState e = skier_exit_state(sk, i, tt, L.k);
-          if (e.visible) hit |= feet_hit_base(tr, e.x / 16.0f, e.y / 16.0f); }
-        if (hit) { fprintf(stderr, "tree %d (%d,%d,%d) hit at fmt %d %02d:%02d\n", t, tr->x, tr->base, tr->h, c, h, m);
-                   g_fail++; return; }
+          if (e.visible) { hit[t] |= feet_hit_base(tr, e.x / 16.0f, e.y / 16.0f);
+                           behind[t] |= feet_behind(tr, e.x / 16.0f, e.y / 16.0f); } }
+        if (hit[t] && !was) fprintf(stderr, "tree %d (%d,%d,%d) hit at fmt %d %02d:%02d\n", t, tr->x, tr->base, tr->h, c, h, m);
       }
     }
+  }
+  for (int t = 0; t < SLOPE_TREE_COUNT; t++) {
+    CHECK(!hit[t]);
+    if (behind[t] && !SLOPE_TREES[t].behind) fprintf(stderr, "tree %d needs behind = 1\n", t);
+    CHECK(!behind[t] || SLOPE_TREES[t].behind);   // a static tree would paint over a skier behind it
   }
 }
 

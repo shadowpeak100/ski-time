@@ -73,7 +73,7 @@ Exact values per phase are copied from the prototype's `THEMES` (hex values in 6
 
 ## 4. Scene elements
 
-- **Ridge:** left end `round(0.34H)`, right end `round(0.15H)`, bulge `0.065H` (a lower hillside, so more sky shows across the top right). The ridge stays at least 6 px above the hour row. Slope trees stand at least 6 px below the ridge and poles at least 4 px below it.
+- **Ridge:** left end `round(0.34H)`, right end `round(0.15H)`, bulge `0.065H` (a lower hillside, so more sky shows across the top right). The ridge stays at least 6 px above the hour row. Slope-tree bases stand at least 4 px below the ridge and poles at least 4 px below it.
 - **Sky:** the dithered stops use `t = clamp(y/(ridgeY(0)*0.92))^1.2 × (stops−1)`. At each pixel choose stop `i` or `i+1` with Bayer threshold `t−i`.
 - **Sun:** a disc plus a dithered halo, as in phase 1, but with the theme's position, radius and colours. The sunrise and sunset suns are drawn before the peaks, so the peaks can overlap them.
 - **Moon:** a disc of radius r, lit by the real phase `p` (0 = new, 0.5 = full):
@@ -103,13 +103,22 @@ Exact values per phase are copied from the prototype's `THEMES` (hex values in 6
   - FFAA55 and FFFFAA dithered glow ellipses, 550000 crossed logs and 555555 stones
   - three flame tongues in red, orange, chrome yellow and a yellow core, plus sparks
   - it animates from the same continuous phase clock as the smoke, so it moves only while the face redraws
-- **Slope trees (Emery only, every phase):** 9 pines, each given as (x, base, height) and drawn back to front, each with a `snowShade` ellipse shadow `(x+2, base, 0.42h × 1.6)`:
-  - (50, 80, 16), (41, 86, 16), (30, 100, 16), (38, 104, 9)
-  - (180, 117, 10)
-  - (46, 99, 8), (32, 152, 12), (22, 154, 12), (153, 129, 11)
+- **Slope trees (Emery only, every phase):** 44 pines in 10 clusters, like the tree islands on a real ski hill. Each is given as (x, base, height) and drawn back to front, each with a `snowShade` ellipse shadow `(x+2, base, 0.42h × 1.6)`. `decor.c` holds the list sorted by base (at most 64 trees):
+  - top centre, on the tree line: (130,41,9) (136,41,8) (123,42,15) (109,44,9) (118,45,11)
+  - top left, beside the hour row: (50,62,12) (44,64,8) (39,65,14) (54,67,9) (37,71,8)
+  - left edge: (21,73,10) (15,76,13) (9,78,11) (23,79,10)
+  - upper-left grove: (50,80,16) (41,86,16) (46,99,8) (30,100,16) (38,104,9)
+  - right edge: (183,114,7) (181,120,11) (175,121,7)
+  - above the chalet: (151,128,8) (157,128,10) (152,133,14) (159,133,11)
+  - left, beside the minute row: (38,151,11) (32,153,12) (26,154,8)
+  - bottom centre: (107,181,11) (117,182,9) (99,184,7) (106,187,9) (113,187,13) (120,189,8)
+  - bottom left: (54,184,8) (64,187,7) (46,188,9) (39,190,9) (51,190,11) (58,191,7)
+  - bottom-left corner: (9,189,8) (22,189,7) (16,191,7)
   - Trees stay outside each digit row's rectangle (that row's boxes widened by 3 px and made 2 px taller top and bottom) and clear of every digit stroke. Skiers may pass behind them but never touch the base.
-  - The trees are drawn each frame over the skiers, not into the stored background, so a skier higher up the slope passes behind a tree's canopy. A skier's feet never touch a tree's base: no feet point lies within 3 px of the tree's half-width `ceil(0.42h)` across, from 2 px above the base to 9 px below it.
-  - A host test pins that base rule for every skier path, stop and ski-out point, over every minute and all 4 clock formats. It also checks that no tree covers any digit stroke of any slot (2 px margin) or either digit row's rectangle, and that the trees stay clear of the ridge, chalet, strip, poles (6 px), each other (8 px) and the chimney smoke plume.
+  - A skier's feet never touch a tree's base: no feet point lies within 3 px of the tree's half-width `ceil(0.42h)` across, from 2 px above the base to 9 px below it.
+  - Trees in a cluster may stand close: any two trees are at least 5 px apart across or at least 5 px apart in base. A tree's base is at least 4 px below the ridge, so trees at the forest edge may overlap the tree line.
+  - **Static and per-frame trees:** each tree has a `behind` flag. It is 1 when some skier's feet pass under its canopy (x from `x − hw` to `x + hw + 2`, y from `base − h` to `base − 3`) at any minute in any clock format. Trees with `behind = 0` are painted once into the stored background after the ridge-line pines, so they cost nothing per frame. Trees with `behind = 1` are drawn each frame over the skiers, so a skier higher up the slope passes behind the canopy. Each set is drawn back to front on its own. A static tree never stands in front of (greater base than) a per-frame tree whose sprite box it overlaps; such a tree is flagged per-frame too. 19 trees are static and 25 are per-frame (5 of those only because they overlap a per-frame tree behind them).
+  - A host test pins the base rule and the `behind` flag for every skier path, stop and ski-out point, over every minute and all 4 clock formats. It also checks that no tree covers any digit stroke of any slot (2 px margin) or either digit row's rectangle, that the list is sorted by base, and that the trees stay clear of the ridge, chalet, strip, poles (6 px), each other and the chimney smoke plume.
 
 ## 5. Data from the phone
 
