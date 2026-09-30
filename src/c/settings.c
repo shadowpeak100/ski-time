@@ -2,6 +2,8 @@
 
 #define PERSIST_KEY_SETTINGS 1   // key 0 is the weather temperature (main.c)
 
+#define PHASE1_SETTINGS_SIZE 12
+
 static Settings s;
 
 static const Settings DEFAULTS = {
@@ -21,6 +23,13 @@ void settings_load(void) {
   if (persist_exists(PERSIST_KEY_SETTINGS) &&
       persist_get_size(PERSIST_KEY_SETTINGS) == (int)sizeof(Settings)) {
     persist_read_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
+  } else if (persist_exists(PERSIST_KEY_SETTINGS) && persist_get_size(PERSIST_KEY_SETTINGS) == PHASE1_SETTINGS_SIZE) {
+    s = DEFAULTS;   // the phase 1 layout is an exact prefix of this one (the pad byte before saver_start is now daypart_mode)
+    persist_read_data(PERSIST_KEY_SETTINGS, &s, PHASE1_SETTINGS_SIZE);
+    s.daypart_mode = 0;
+    s.fixed_rise = DEFAULTS.fixed_rise;
+    s.fixed_set = DEFAULTS.fixed_set;
+    persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
   } else {
     s = DEFAULTS;
   }
