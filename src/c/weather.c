@@ -67,3 +67,35 @@ uint8_t wx_bg_palette(Daypart d, WxKind w, Col8 out[32]) {
   if (t->night) { add(out, &n, C8(0xFFFFAA)); add(out, &n, C8(0xFFFFFF)); add(out, &n, C8(0xFFFF55)); add(out, &n, C8(0x000055)); }
   return n;
 }
+
+static uint32_t mix(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+static float hsh(int i, uint32_t salt) { return (mix((uint32_t)i * 0x9E3779B9u ^ salt) >> 8) / 16777216.0f; }
+static float fmodp(float a, float m) { float q = (float)(int)(a / m); float r = a - q * m; return r < 0 ? r + m : r; }
+
+int wx_drop_count(const WxDef *d, bool still) {
+  if (d->precip == PRECIP_RAIN) return still ? (d->len < 3 ? d->rate * 2 : d->rate * 17 / 10) : d->rate;
+  if (d->precip == PRECIP_SNOW) return still ? d->rate * 3 / 2 : d->rate;
+  return 0;
+}
+
+bool wx_rain_drop(const Layout *L, const WxDef *d, int i, float t, bool still, int8_t wind, Vec2 *a, Vec2 *b) {
+  if (still) t = 2.3f;
+  const float k = L->k, top = L->comp_top - 2, span = top + 20, slant = 0.3f * wind, len = d->len * k;
+  const float x0 = hsh(i, 0xA1u) * (L->W + 40) - (wind > 0 ? 40 : wind == 0 ? 20 : 0);
+  const float y = fmodp(hsh(i, 0xB7u) * span + t * d->speed * k, span) - 10;
+  if (y + len > top) return false;
+  const float x = x0 + (y + 10) * slant;
+  *a = (Vec2){ x, y }; *b = (Vec2){ x + len * slant, y + len };
+  return true;
+}
+
+bool wx_flake(const Layout *L, const WxDef *d, int i, float t, bool still, int8_t wind, int16_t *x, int16_t *y, bool *big) {
+  if (still) t = 2.3f;
+  const float k = L->k, top = L->comp_top - 2;
+  const float sp = d->speed * k * (0.6f + hsh(i, 0xD4u) * 0.8f);
+  const float yy = fmodp(hsh(i, 0xC3u) * top + t * sp, top);
+  if (yy > top - 3) return false;
+  const float xx = fmodp(hsh(i, 0xB2u) * L->W + geom_sin(t * 1.3f + i) * 3 * k + 0.3f * wind * yy, (float)L->W);
+  *x = (int16_t)xx; *y = (int16_t)yy; *big = (i % 3) == 0;
+  return true;
+}

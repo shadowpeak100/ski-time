@@ -491,6 +491,49 @@ static void test_effective_mode(void) {
   CHECK_EQ_INT(effective_anim_mode(7, false, 1320, 420, 12, 0), ANIM_BALANCED);
 }
 
+#include "bolt.h"
+static void test_bolt_geometry(void) {
+  Layout L; layout_init(&L, 200, 228);
+  Bolt a, b; bolt_build(&a, &L); bolt_build(&b, &L);
+  CHECK_EQ_INT(a.n_main, BOLT_MAIN_PTS);
+  CHECK(memcmp(&a, &b, sizeof a) == 0);                          // deterministic
+  for (int i = 0; i < a.n_main; i++) {
+    CHECK(a.main[i].x >= 0 && a.main[i].x < 200 && a.main[i].y >= 0);
+    CHECK(a.main[i].y <= layout_ridge_y(&L, a.main[i].x) + 3);
+  }
+  CHECK_NEAR(a.main[0].x, 40, 0.01); CHECK_NEAR(a.main[a.n_main - 1].x, 20, 0.01);
+  for (int j = 0; j < BOLT_BRANCHES; j++) {
+    CHECK_EQ_INT(a.n_br[j], BOLT_BRANCH_PTS);
+    for (int i = 0; i < a.n_br[j]; i++) CHECK(a.br[j][i].y <= layout_ridge_y(&L, a.br[j][i].x) + 3);
+  }
+  bool f;
+  CHECK(bolt_visible(50, false, &f) && f);                      // first flicker with the sky flash
+  CHECK(!bolt_visible(150, false, &f));                         // gap
+  CHECK(bolt_visible(250, false, &f) && !f);                    // second flicker, no flash
+  CHECK(!bolt_visible(2000, false, &f));
+  CHECK(bolt_visible(2000, true, &f) && !f);                    // still: always on, never flashes
+  CHECK(bolt_visible(5050, false, &f) && f);                    // repeats every 5 s
+}
+static void test_precip_geometry(void) {
+  Layout L; layout_init(&L, 200, 228);
+  const float top = L.comp_top - 2;
+  for (int w = WX_DRIZZLE; w <= WX_STORM; w++) {
+    const WxDef *d = wx_def((WxKind)w);
+    if (d->precip == PRECIP_NONE) continue;
+    for (int still = 0; still < 2; still++) for (int8_t wind = -1; wind <= 1; wind++)
+      for (float t = 0; t < 20; t += 0.37f) for (int i = 0; i < wx_drop_count(d, still); i++) {
+        if (d->precip == PRECIP_RAIN) { Vec2 a, b; if (wx_rain_drop(&L, d, i, t, still, wind, &a, &b)) CHECK(a.y <= top && b.y <= top); }
+        else { int16_t x, y; bool big; if (wx_flake(&L, d, i, t, still, wind, &x, &y, &big)) CHECK(y <= top - 3 && x >= 0 && x < 200); }
+      }
+  }
+  const WxDef *r = wx_def(WX_RAIN), *z = wx_def(WX_DRIZZLE), *s = wx_def(WX_SNOW);
+  CHECK_EQ_INT(wx_drop_count(r, false), 70); CHECK_EQ_INT(wx_drop_count(r, true), 119);
+  CHECK_EQ_INT(wx_drop_count(z, true), 64);  CHECK_EQ_INT(wx_drop_count(s, true), 142);
+  Vec2 a1, b1, a2, b2;                                          // still positions do not depend on t
+  bool v1 = wx_rain_drop(&L, r, 5, 0.0f, true, -1, &a1, &b1), v2 = wx_rain_drop(&L, r, 5, 99.0f, true, -1, &a2, &b2);
+  CHECK(v1 == v2); if (v1) { CHECK_NEAR(a1.x, a2.x, 1e-4); CHECK_NEAR(a1.y, a2.y, 1e-4); }
+}
+
 int main(void) {
   test_harness_self();
   test_geom_sqrt_trig();
@@ -521,6 +564,8 @@ int main(void) {
   test_wx_tables();
   test_wx_palette_budget();
   test_effective_mode();
+  test_bolt_geometry();
+  test_precip_geometry();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;
