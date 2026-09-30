@@ -207,9 +207,9 @@ const THEMES={
     pineLit:'#005555',pineShade:'#000000',pineSnow:'#AAAAFF',snow:'#AAAAFF',snowShade:'#5555AA',snowShadow:'#5555AA',powder:'#FFFFFF',
     text:'#000055',cloud:['#5555AA','#AAAAFF','#000055']}};
 let TH=THEMES.day;
-/* Pines standing on the open slope (Emery). Each spot was checked against every skier path, stop and ski-out
-   for all 1440 minutes in all four clock formats, plus the digits, chalet, campfire, floodlight poles and strip. */
-const SLOPE_TREES=[[50,80,16],[41,86,16],[30,100,16],[38,104,9],[180,117,10],[46,99,8],[32,152,12],[96,136,9],[153,129,11]];
+/* Pines standing on the open slope (Emery), drawn over the skiers. No skier path, stop or ski-out touches a tree's
+   base in any minute or clock format; trees stay outside each digit row's block, the chalet, smoke, poles and strip. */
+const SLOPE_TREES=[[50,80,16],[41,86,16],[30,100,16],[38,104,9],[180,117,10],[46,99,8],[32,152,12],[22,154,12],[153,129,11]];
 /* Night floodlights: tall poles at the edges of the run, aimed across it at the digits.
    Each lights a cone of snow that fades with distance and toward its edges. */
 const FLOODS=[{base:[.95,.30],aim:[.40,.36]},{base:[.97,.50],aim:[.38,.53]},{base:[.965,.64],aim:[.40,.70]},
@@ -374,8 +374,10 @@ function buildBackground(L){
   const r2=mulberry(21),trees=[];
   for(let x=W*.2;x<W*.8;x+=(5+r2()*6)*k){const base=ridgeY(x)+1.5*k;const h=Math.min((11+r2()*11)*k,base-3);trees.push([x+r2()*3*k,base,h])}
   trees.sort((a,b)=>a[1]-b[1]).forEach(t=>pine(g,t[0],t[1],t[2]));
-  if(W>=200)[...SLOPE_TREES].sort((a,b)=>a[1]-b[1]).forEach(([x,b,h])=>{g.fillStyle=th.snowShade;g.beginPath();g.ellipse(x+2,b,h*.42,1.6,0,0,Math.PI*2);g.fill();pine(g,x,b,h)});
   return cv}
+/* Slope trees are drawn each frame over the skiers, so a skier higher up the slope passes behind them. */
+function drawSlopeTrees(g,L){
+  if(L.W>=200)[...SLOPE_TREES].sort((a,b)=>a[1]-b[1]).forEach(([x,b,h])=>{g.fillStyle=L.theme.snowShade;g.beginPath();g.ellipse(x+2,b,h*.42,1.6,0,0,Math.PI*2);g.fill();pine(g,x,b,h)})}
 function pine(g,x,base,h){
   g.fillStyle=C.bulgarian;g.fillRect(Math.round(x-.5),Math.round(base-h*.16),1,Math.ceil(h*.16));
   for(let i=0;i<3;i++){const top=base-h+i*h*.27,bot=top+h*.46,hw=h*(.2+i*.1);
@@ -605,6 +607,7 @@ function render(g,L,f){
   g.drawImage(L.fg,0,0);drawSmoke(g,L,f.clock);if(L.theme.night)drawCampfire(g,L,f.clock);drawComps(g,L,f.secs);
   if(tr&&tau<T.exitEnd+.4)f.old.forEach((sk,i)=>{const s=exitState(L,sk,tau,i);if(s)drawSkier(g,s.x,s.y,s.h,sk.color,L.k)});
   f.neu.forEach((sk,i)=>{const s=states[i];if(!s)return;drawSkier(g,s.x,s.y,s.h,sk.color,L.k);if(s.spray)drawSpray(g,s,L.k,s.spray)});
+  drawSlopeTrees(g,L);
   quantize(g,W,H);
   if(f.paths){g.save();g.setLineDash([1,2]);g.lineWidth=1;
     [...(f.old||[]),...f.neu].forEach(sk=>{

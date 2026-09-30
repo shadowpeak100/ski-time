@@ -392,6 +392,10 @@ static void test_slope_trees_clear(void) {
       CHECK(abs(o->base - tr->base) > 12 || abs(o->x - tr->x) >= 8);
     }
     CHECK(b.x1 < chx - 4 || b.x0 > chx + 12 || b.y1 < chy - 20 || b.y0 > chy + 2);   // smoke plume
+    for (int r = 0; r < 2; r++) {                                   // outside each digit row's block
+      const Pt16 *a = &L.boxes[2 * r], *z = &L.boxes[2 * r + 1];
+      CHECK(b.x1 < a->x - 3 || b.x0 > z->x + L.gw + 3 || b.y1 < a->y - 2 || b.y0 > a->y + L.gh + 2);
+    }
     bool covers = false;
     for (uint8_t slot = 0; slot < 4; slot++) for (uint8_t d = 0; d < 10; d++)
       for (uint8_t j = 0; j < glyph_stroke_count(d); j++) {
