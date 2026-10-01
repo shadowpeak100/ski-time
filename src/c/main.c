@@ -125,6 +125,9 @@ static void apply_theme(void) {
     moon = s_moon;
   }
   scene_set_theme(theme_for(dp), moon);
+#ifdef MOCK_WEATHER
+  scene_set_weather(MOCK_WEATHER);
+#endif
 }
 
 static void anim_stop(void) {

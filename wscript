@@ -28,6 +28,9 @@ def build(ctx):
         daypart = os.environ.get('MOCK_DAYPART')    # 0 sunrise, 1 midday, 2 sunset, 3 night
         if daypart:
             ctx.env.append_unique('DEFINES', ['MOCK_DAYPART=%d' % int(daypart)])
+        weather = os.environ.get('MOCK_WEATHER')    # WxKind: 0 clear .. 7 storm
+        if weather:
+            ctx.env.append_unique('DEFINES', ['MOCK_WEATHER=%d' % int(weather)])
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
         ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'),
                       target=app_elf, bin_type='app')

@@ -17,6 +17,17 @@ static bool s_bg_valid;
 static float s_chim_x, s_chim_y;   // smoke origin, kept in float so the puffs drift sub-pixel as in the prototype
 static const Theme *s_theme;
 static float s_moon;
+#ifdef PBL_PLATFORM_EMERY
+static WxKind s_wx;
+
+void scene_set_weather(WxKind w) {
+  if (w == s_wx) return;
+  s_wx = w;
+  s_bg_valid = false;
+}
+
+WxKind scene_weather(void) { return s_wx; }
+#endif
 
 void scene_set_theme(const Theme *t, float moon_phase) {
   if (t == s_theme && moon_phase == s_moon) return;
@@ -113,20 +124,29 @@ static void peak(GContext *ctx, float px, float py, float hw, float base,
   poly(ctx, cr, 5, cap_shade);
 }
 
-// Sky gradient dithered across the theme's stops, with the sun disc and its dithered halo.
+// Sky gradient dithered across the theme's (or weather's) stops, with the sun disc and its dithered halo.
 static void sky_pass(GContext *ctx, const Layout *L) {
   const Theme *th = scene_theme();
   const Body *B = &th->body;
+#ifdef PBL_PLATFORM_EMERY
+  Col8 sky[4];
+  int W = L->W, H = L->H, ns = wx_sky(theme_daypart(th), s_wx, sky) - 1;
+#else
+  const Col8 *sky = th->sky;
   int W = L->W, H = L->H, ns = th->nsky - 1;
+#endif
   float k = L->k, sx = W * B->x, sy = H * B->y, sr = B->r * k, halo = B->halo * k, horizon = layout_ridge_y(L, 0) * 0.92f;
   bool sun = B->kind == BODY_SUN;
+#ifdef PBL_PLATFORM_EMERY
+  sun = sun && !wx_def(s_wx)->deck;   // cloud cover hides the sun
+#endif
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   for (int y = 0; y < H; y++) {
     float f = y / horizon;
     f = f < 0 ? 0 : f > 1 ? 1 : f;
     float t = f * root5(f) * ns, dy = y + 0.5f - sy;
     int i = (int)t < ns - 1 ? (int)t : ns - 1;
-    uint8_t lo = th->sky[i], hi = th->sky[i + 1];
+    uint8_t lo = sky[i], hi = sky[i + 1];
     t -= i;
     uint8_t *row = fb_row(fb, y);
     for (int x = 0; x < W; x++) {
@@ -290,15 +310,91 @@ static void slope_trees(GContext *ctx, uint8_t which) {
 }
 #endif
 
+#ifdef PBL_PLATFORM_EMERY
+// Partly-cloudy cloud: five bumps over a flat-based ellipse, in shade, mid and lit layers (roles lit, mid, shade).
+static void flat_cloud(GContext *ctx, float x, float y, const Col8 *c, float s) {
+  static const int8_t bumps[5][4] = { { -20, 1, 6, 4 }, { -10, -1, 8, 5 }, { 1, -2, 9, 6 }, { 12, -1, 8, 5 }, { 22, 1, 6, 4 } };
+  static const float layer[3][6] = {   // dx, dy, rx scale, ry scale, base dy, base h
+    { 1, 1.5f, 1, 1, 4, 3.2f }, { 0, 0.6f, 0.96f, 0.95f, 3, 2.4f }, { -0.8f, -0.8f, 0.82f, 0.75f, 0, 0 } };
+  for (int l = 0; l < 3; l++) {
+    const float *q = layer[l];
+    GColor col = gcol(c[2 - l]);
+    for (int i = 0; i < 5; i++)
+      fb_fill_ellipse(ctx, x + bumps[i][0] * s + q[0], y + bumps[i][1] * s + q[1], bumps[i][2] * s * q[2], bumps[i][3] * s * q[3], col);
+    if (q[5] > 0) fb_fill_ellipse(ctx, x + s, y + q[4] * s, 28 * s, q[5] * s, col);
+  }
+}
+
+// Deck cloud: seven round puffs in shade, mid and lit layers.
+static void deck_cloud(GContext *ctx, float x, float y, const Col8 *c, float s) {
+  static const int8_t puffs[7][3] = { { -14, 4, 7 }, { -6, -2, 9 }, { 5, -4, 10 }, { 15, 1, 8 }, { 22, 5, 6 }, { 0, 6, 9 }, { -18, 7, 5 } };
+  static const float layer[3][3] = { { 1, 2, 1 }, { 0, 0.8f, 0.96f }, { -0.8f, -0.8f, 0.8f } };   // dx, dy, r scale
+  for (int l = 0; l < 3; l++) {
+    GColor col = gcol(c[2 - l]);
+    for (int i = 0; i < 7; i++) {
+      float r = puffs[i][2] * s * layer[l][2];
+      fb_fill_ellipse(ctx, x + puffs[i][0] * s + layer[l][0], y + puffs[i][1] * s + layer[l][1], r, r, col);
+    }
+  }
+}
+
+// Two rows of deck clouds; the back row uses the darker roles.
+static void deck_pass(GContext *ctx, const Layout *L, const Col8 *cl) {
+  float k = L->k;
+  int W = L->W;
+  const Col8 back[3] = { cl[1], cl[2], cl[2] };
+  Mulberry r = { 5 };
+  for (float x = -4; x < W + 20; x += 18 * k) {
+    float y = (16 + mulberry_next(&r) * 6) * k;
+    deck_cloud(ctx, x, y, back, (0.65f + mulberry_next(&r) * 0.25f) * k);
+  }
+  for (float x = -10; x < W + 20; x += 15 * k) {
+    float y = (3 + mulberry_next(&r) * 6) * k;
+    deck_cloud(ctx, x, y, cl, (0.75f + mulberry_next(&r) * 0.3f) * k);
+  }
+}
+
+// Dithered fog over every row above the strip, thinning from 0.08H down to 0.58H.
+static void fog_pass(GContext *ctx, const Layout *L, int fog256, Col8 c) {
+  int W = L->W, H = L->H;
+  GBitmap *fb = graphics_capture_frame_buffer(ctx);
+  if (!fb) return;
+  for (int y = 0; y < L->comp_top; y++) {
+    float f = (y - H * 0.08f) / (H * 0.5f);
+    f = f < 0 ? 0 : f > 1 ? 1 : f;
+    float p256 = fog256 * (1 - f);
+    if (p256 <= 0) continue;
+    uint8_t *row = fb_row(fb, y);
+    for (int x = 0; x < W; x++)
+      if (aval_bayer(x, y) * 16 + 8 < p256) row[x] = c;
+  }
+  graphics_release_frame_buffer(ctx, fb);
+}
+#endif
+
 static bool build_bg(GContext *ctx, const Layout *L) {
   int W = L->W, H = L->H;
   float k = L->k;
   s_npal = 0;
   graphics_context_set_antialiased(ctx, false);   // crisp pixel art: palette colours only, no blended edges
   const Theme *th = scene_theme();
+#ifdef PBL_PLATFORM_EMERY
+  Daypart d = theme_daypart(th);
+  const WxDef *df = wx_def(s_wx);
+  sky_pass(ctx, L);
+  if (!df->deck) {
+    if (th->stars) stars_pass(ctx, L);
+    if (th->body.kind == BODY_MOON) moon_pass(ctx, L);
+  }
+  static const float flat[3][3] = { { .62f, .07f, 1 }, { .2f, .06f, .8f }, { .9f, .13f, .7f } };
+  for (int i = 0; i < df->clouds && i < 3; i++)
+    flat_cloud(ctx, flat[i][0] * W, flat[i][1] * H, wx_cloud_roles(d, s_wx), flat[i][2] * k);
+  if (df->deck) deck_pass(ctx, L, wx_cloud_roles(d, s_wx));
+#else
   sky_pass(ctx, L);
   if (th->stars) stars_pass(ctx, L);
   if (th->body.kind == BODY_MOON) moon_pass(ctx, L);
+#endif
 
   static const float far[5][3] = { { .05f, .17f, .17f }, { .22f, .12f, .15f }, { .40f, .10f, .17f },
                                    { .58f, .06f, .15f }, { .74f, .035f, .12f } };
@@ -354,6 +450,7 @@ static bool build_bg(GContext *ctx, const Layout *L) {
   }
   for (int i = 0; i < nt; i++) pine(ctx, trees[i][0], trees[i][1], trees[i][2]);
 #ifdef PBL_PLATFORM_EMERY
+  if (df->fog256) fog_pass(ctx, L, df->fog256, wx_fog_colour(d));
   slope_trees(ctx, 0);   // no skier passes behind these, so they cost nothing per frame
 #endif
 
