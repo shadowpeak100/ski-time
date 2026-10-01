@@ -121,7 +121,10 @@ static void peak(GContext *ctx, float px, float py, float hw, float base,
                          px + hw * 0.02f, ly - dep * 0.2f };
   const float cr[10] = { px, py, px + hw * 0.02f, ly - dep * 0.2f, px + hw * 0.12f, ry - dep * 0.05f,
                          px + hw * 0.2f, ry - dep * 0.35f, rx, ry };
-  poly(ctx, cr, 5, cap_shade);
+  // gpath leaves the shared edge between the halves unfilled, so the shade underlay spans the whole cap.
+  const float cap[16] = { cl[0], cl[1], cl[2], cl[3], cl[4], cl[5], cl[6], cl[7],
+                          cr[2], cr[3], cr[4], cr[5], cr[6], cr[7], cr[8], cr[9] };
+  poly(ctx, cap, 8, cap_shade);
   poly(ctx, cl, 5, cap_lit);
 }
 
