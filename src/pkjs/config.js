@@ -2,6 +2,8 @@
 // Served as a data: URI via Pebble.openURL; returns its values as JSON through
 // the pebblejs://close redirect, parsed by index.js on 'webviewclosed'.
 
+var PREVIEW_JS = require('./preview').PREVIEW_JS;
+
 var DEFAULTS = {
   comp1: 1, comp2: 2, comp3: 0,          // weather, date, seconds
   use24: true,
@@ -42,21 +44,32 @@ function toggleRow(label, id) {
 }
 
 var PAGE_JS = [
+"if(CFG.dayMode===2){CFG.dayCycle=false;CFG.dayMode=0;CFG.dayFixed=1;}if(CFG.dayCycle===undefined)CFG.dayCycle=true;",
+"var PV=document.getElementById('pv'),animT0=null,rafId=null,runPending=false;" +
+"function pvSize(){var w=ENV.platform==='basalt'?144:200,h=ENV.platform==='basalt'?168:228;PV.style.width=(2*w)+'px';PV.style.height=(2*h)+'px';}" +
+"function frame(ts){rafId=null;if(runPending){runPending=false;animT0=ts;}var animMs=animT0===null?null:ts-animT0;" +
+"var r=SkiPreview.draw(PV,CFG,ENV,{now:new Date(),animMs:animMs,wxClock:ts/1000});" +
+"if(animT0!==null&&animMs>=r.durationMs)animT0=null;" +
+"var moving=CFG.animMode===0&&ENV.platform!=='basalt'&&SkiPreview.weatherFor(CFG,ENV)>=4;" +
+"if(animT0!==null||moving)rafId=requestAnimationFrame(frame);}" +
+"function redraw(){if(rafId===null)rafId=requestAnimationFrame(frame);}" +
+"pvSize();SkiPreview.draw(PV,CFG,ENV,{now:new Date(),animMs:null,wxClock:0});" +
+"document.getElementById('run').onclick=function(){runPending=true;redraw();};",
 "function show(id,v){document.getElementById(id).style.display=v?'':'none';}",
 "function syncRows(){show('wxFixedRow',!CFG.weatherOn);show('dayModeRow',CFG.dayCycle);" +
 "show('fxRiseRow',CFG.dayCycle&&CFG.dayMode===1);show('fxSetRow',CFG.dayCycle&&CFG.dayMode===1);show('dayFixedRow',!CFG.dayCycle);}",
-"function bindSel(id){var e=document.getElementById(id);e.value=CFG[id];e.onchange=function(){CFG[id]=+e.value;syncRows();};}",
+"function bindSel(id){var e=document.getElementById(id);e.value=CFG[id];e.onchange=function(){CFG[id]=+e.value;syncRows();redraw();};}",
 "function bindToggle(id){var on=document.getElementById(id+'_on'),off=document.getElementById(id+'_off');" +
-"function set(v){CFG[id]=v;syncRows();on.setAttribute('data-on',v?1:0);off.setAttribute('data-on',v?0:1);}" +
+"function set(v){CFG[id]=v;syncRows();redraw();on.setAttribute('data-on',v?1:0);off.setAttribute('data-on',v?0:1);}" +
 "on.onclick=function(){set(true);};off.onclick=function(){set(false);};set(!!CFG[id]);}",
 "function m2t(m){var h=Math.floor(m/60),mm=m%60;return ('0'+h).slice(-2)+':'+('0'+mm).slice(-2);}",
 "function t2m(s){var p=(s||'0:0').split(':');return (+p[0])*60+(+p[1]);}",
 "bindSel('comp1');bindSel('comp2');bindSel('comp3');bindSel('tracks');bindSel('dayMode');bindSel('animMode');bindSel('wxFixed');bindSel('dayFixed');",
 "bindToggle('use24');bindToggle('lead0');bindToggle('saverOn');bindToggle('weatherOn');bindToggle('dayCycle');",
-"(function(){var a=document.getElementById('svStart'),b=document.getElementById('svEnd');a.value=m2t(CFG.saverStart);b.value=m2t(CFG.saverEnd);a.onchange=function(){CFG.saverStart=t2m(a.value);};b.onchange=function(){CFG.saverEnd=t2m(b.value);};})();",
+"(function(){var a=document.getElementById('svStart'),b=document.getElementById('svEnd');a.value=m2t(CFG.saverStart);b.value=m2t(CFG.saverEnd);a.onchange=function(){CFG.saverStart=t2m(a.value);redraw();};b.onchange=function(){CFG.saverEnd=t2m(b.value);redraw();};})();",
 "(function(){var a=document.getElementById('fxRise'),b=document.getElementById('fxSet');" +
 "a.value=m2t(CFG.fixedRise);b.value=m2t(CFG.fixedSet);" +
-"a.onchange=function(){CFG.fixedRise=t2m(a.value);};b.onchange=function(){CFG.fixedSet=t2m(b.value);};})();",
+"a.onchange=function(){CFG.fixedRise=t2m(a.value);redraw();};b.onchange=function(){CFG.fixedSet=t2m(b.value);redraw();};})();",
 "syncRows();",
 "document.getElementById('save').onclick=function(){location.href='pebblejs://close#'+encodeURIComponent(JSON.stringify(CFG));};",
 "document.getElementById('cancel').onclick=function(){location.href='pebblejs://close#';};"
@@ -88,10 +101,14 @@ function buildHtml(cfg, env) {
 'padding:6px 10px;border-radius:14px;font-size:13px;font-weight:bold;white-space:nowrap;}' +
 '.kofibtn{display:block;text-align:center;padding:12px;border-radius:10px;background:#ff5e5b;color:#fff;' +
 'text-decoration:none;font-weight:600;font-size:15px;}' +
+'.preview{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:8px;}' +
+'#pv{image-rendering:pixelated;image-rendering:crisp-edges;border-radius:12px;background:#000;}' +
+'.runbtn{padding:8px 14px;border-radius:8px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink);font-size:14px;}' +
 '</style></head><body><div class="wrap"><div class="hdr"><h1>Ski Time</h1>' +
 '<a class="kofi" href="https://ko-fi.com/shadowpeak100" target="_blank" rel="noopener" title="Support Ski Time on Ko-fi">' +
 '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
 '<path d="M4 8h11v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M15 9h2.5a2.5 2.5 0 0 1 0 5H15"/><path d="M5 21h11"/></svg>Ko-fi</a></div>' +
+'<div class="preview"><canvas id="pv"></canvas><button class="runbtn" id="run">&#9654; Run animation</button></div>' +
 '<section><h2>Display</h2>' +
 selRow('Animations', 'animMode', ['Full animations (may use more battery)', 'Balanced', 'Battery saver']) +
 toggleRow('Weather', 'weatherOn') +
@@ -115,7 +132,7 @@ toggleRow('Use Battery saver on a schedule', 'saverOn') +
 'Ski Time is free, with no ads. If it\'s useful to you, you can support development. Thank you!</p>' +
 '<a class="kofibtn" href="https://ko-fi.com/shadowpeak100" target="_blank" rel="noopener">&#9749; Buy me a coffee on Ko-fi</a></section>' +
 '</div><div class="bar"><button id="cancel">Cancel</button><button class="save" id="save">Save</button></div>' +
-'<script>var CFG=' + JSON.stringify(cfg) + ';' + PAGE_JS + '</script></body></html>';
+'<script>var CFG=' + JSON.stringify(cfg) + ';var ENV=' + JSON.stringify(env || envFrom({}, 'emery')) + ';' + PREVIEW_JS + '\n' + PAGE_JS + '</script></body></html>';
 }
 
 // Preview inputs from the phone's cache; junk or missing values fall back to clear, calm, 07:00-19:00.

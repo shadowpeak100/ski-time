@@ -1,6 +1,6 @@
 // Settings-page preview: a port of the watch's drawing code (src/c/) to canvas, inlined into the page as a string.
 // Everything is drawn into a software framebuffer of 0xRRGGBB pixels, the way the C draws into the Pebble
-// framebuffer, then blitted as runs of fillRect so the pixels stay crisp. Prototype: docs/prototypes/weather.html.
+// framebuffer, then blitted as one ImageData so the pixels stay crisp. Prototype: docs/prototypes/weather.html.
 
 function skiPreviewFactory() {
   'use strict';
@@ -1034,18 +1034,13 @@ function skiPreviewFactory() {
     }
     return cache[key];
   }
-  function blit(g) {   // runs of one colour per row, as crisp fillRects
-    var last = -1;
-    for (var y = 0; y < H; y++) {
-      var row = y * W, x = 0;
-      while (x < W) {
-        var c = FB[row + x], x1 = x + 1;
-        while (x1 < W && FB[row + x1] === c) x1++;
-        if (c !== last) { g.fillStyle = hex(c); last = c; }
-        g.fillRect(x, y, x1 - x, 1);
-        x = x1;
-      }
+  function blit(g) {   // the framebuffer as one ImageData; the page scales the canvas with CSS
+    var img = g.createImageData(W, H), px = img.data;
+    for (var i = 0, j = 0; i < W * H; i++, j += 4) {
+      var c = FB[i];
+      px[j] = c >> 16 & 255; px[j + 1] = c >> 8 & 255; px[j + 2] = c & 255; px[j + 3] = 255;
     }
+    g.putImageData(img, 0, 0);
   }
 
   function draw(canvas, cfg, env, opts) {

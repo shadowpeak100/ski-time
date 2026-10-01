@@ -46,7 +46,10 @@ var now = new Date(2026, 9, 1, 12, 30, 38);
       assert.strictEqual(cv.width, platform === 'basalt' ? 144 : 200);
       assert.strictEqual(cv.height, platform === 'basalt' ? 168 : 228);
       assert(r && r.durationMs >= 4500 && r.durationMs <= 7500, 'duration ' + (r && r.durationMs));
-      assert(cv.getContext('2d').calls() > 100, 'drew something');
+      var gctx = cv.getContext('2d'), img = gctx.lastImage();
+      assert(gctx.count('putImageData') >= 1, 'blitted');
+      assert.strictEqual(img.width * img.height, platform === 'basalt' ? 144 * 168 : 200 * 228);
+      assert(img.data.some(function(v) { return v !== 0; }), 'image not blank');
     });
   }
 });
