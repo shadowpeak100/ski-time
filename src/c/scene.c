@@ -113,15 +113,16 @@ static void pine(GContext *ctx, float x, float base, float h) {
 static void peak(GContext *ctx, float px, float py, float hw, float base,
                  GColor lit, GColor shade, GColor cap_lit, GColor cap_shade) {
   float split = px + hw * 0.12f;
+  // Shade under the whole peak so antialias-free edge pixels shared by both halves never show the sky.
+  fb_fill_tri(ctx, px - hw, base, px, py, px + hw, base, shade);
   fb_fill_tri(ctx, px - hw, base, px, py, split, base, lit);
-  fb_fill_tri(ctx, px, py, px + hw, base, split, base, shade);
   float dep = (base - py) * 0.3f, lx = px - hw * 0.3f, rx = px + hw * 0.3f, ly = py + dep, ry = py + dep * 1.1f;
   const float cl[10] = { px, py, lx, ly, lx + (px - lx) * 0.35f, ly - dep * 0.25f, px - hw * 0.05f, ly + dep * 0.1f,
                          px + hw * 0.02f, ly - dep * 0.2f };
-  poly(ctx, cl, 5, cap_lit);
   const float cr[10] = { px, py, px + hw * 0.02f, ly - dep * 0.2f, px + hw * 0.12f, ry - dep * 0.05f,
                          px + hw * 0.2f, ry - dep * 0.35f, rx, ry };
   poly(ctx, cr, 5, cap_shade);
+  poly(ctx, cl, 5, cap_lit);
 }
 
 // Sky gradient dithered across the theme's (or weather's) stops, with the sun disc and its dithered halo.
