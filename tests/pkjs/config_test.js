@@ -1,7 +1,7 @@
 var assert = require('assert');
 var config = require('../../src/pkjs/config.js');
 
-function cfg() { var c = {}, k; for (k in config.DEFAULTS) c[k] = config.DEFAULTS[k]; return c; }
+function cfg(over) { var c = {}, k; for (k in config.DEFAULTS) c[k] = config.DEFAULTS[k]; for (k in over || {}) c[k] = over[k]; return c; }
 
 var html = config.buildHtml(cfg(), {});
 assert(html.indexOf('class="kofi"') > 0, 'header Ko-fi pill');
@@ -22,7 +22,8 @@ assert.strictEqual(e.wmo, 0); assert.strictEqual(e.wind, 0);
 
 var makeCanvas = require('./stub_dom.js').makeCanvas;
 
-function runPage(c, env) {
+function runPage(c, env, opt) {
+  opt = opt || {};
   var page = config.buildHtml(c, env);
   var els = {}, raf = [], ids = page.match(/id="([^"]+)"/g).map(function(s) { return s.slice(4, -1); });
   ids.forEach(function(id) {
@@ -31,11 +32,12 @@ function runPage(c, env) {
   var win = {
     document: { getElementById: function(id) { if (!els[id]) throw new Error('missing #' + id); return els[id]; } },
     location: {},
-    requestAnimationFrame: function(f) { raf.push(f); return raf.length; },
+    requestAnimationFrame: opt.noRaf ? undefined : function(f) { raf.push(f); return raf.length; },
     cancelAnimationFrame: function() {},
     performance: { now: function() { return 0; } },
     Date: Date
   };
+  if (opt.nullCtx) els.pv.getContext = function() { return null; };
   var js = page.match(/<script>([\s\S]*)<\/script>/)[1];
   new Function('window', 'document', 'location', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance',
     js + ';window.CFG=CFG;window.SkiPreview=SkiPreview;')(win, win.document, win.location, win.requestAnimationFrame, win.cancelAnimationFrame, win.performance);
@@ -100,5 +102,19 @@ runPage(old, config.envFrom({ wx: 'abc' }, 'basalt'));
   for (var dp = 0; dp < 4; dp++) for (var wx = 0; wx < 8; wx++)
     runPage(cfg({ dayCycle: false, dayFixed: dp, weatherOn: false, wxFixed: wx }), config.envFrom({}, p));
 });
+
+// A broken preview path must not stop Save and Cancel working.
+(function() {
+  var realSetTimeout = global.setTimeout;
+  global.setTimeout = function() { return 0; };  // keep fallback frames from running after the test
+  try {
+    [{ noRaf: true }, { nullCtx: true }].forEach(function(opt) {
+      var res;
+      assert.doesNotThrow(function() { res = runPage(cfg(), envE, opt); }, JSON.stringify(opt));
+      assert.strictEqual(typeof res.els.save.onclick, 'function', 'save bound ' + JSON.stringify(opt));
+      assert.strictEqual(typeof res.els.cancel.onclick, 'function', 'cancel bound ' + JSON.stringify(opt));
+    });
+  } finally { global.setTimeout = realSetTimeout; }
+})();
 
 console.log('config tests passed');

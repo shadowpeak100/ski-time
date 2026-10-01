@@ -12,7 +12,7 @@ var env = { platform: 'emery', wmo: 0, wind: 0, rise: 420, set: 1140 };
 // daypartFor mirrors src/c/daypart.c
 assert.strictEqual(P.daypartFor(cfg({ dayCycle: false, dayFixed: 3 }), env, 720), 3);
 assert.strictEqual(P.daypartFor(cfg({ dayCycle: false, dayFixed: 9 }), env, 720), 1);
-assert.strictEqual(P.daypartFor(cfg({ dayMode: 2 }), env, 0), 1);                         // legacy "Always midday"
+assert.strictEqual(P.daypartFor(cfg({ dayMode: 2 }), env, 0), 1);                         // legacy dayMode 2 renders dayFixed (default 1), like the C DPM_STATIC
 assert.strictEqual(P.daypartFor(cfg(), env, 720), 1);
 assert.strictEqual(P.daypartFor(cfg(), env, 0), 3);
 assert.strictEqual(P.daypartFor(cfg({ dayMode: 1, fixedRise: 1200, fixedSet: 300 }), env, 0), 1);   // sunset before sunrise: wrap-aware

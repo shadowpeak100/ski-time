@@ -44,16 +44,19 @@ function toggleRow(label, id) {
 }
 
 var PAGE_JS = [
+"document.getElementById('save').onclick=function(){location.href='pebblejs://close#'+encodeURIComponent(JSON.stringify(CFG));};" +
+"document.getElementById('cancel').onclick=function(){location.href='pebblejs://close#';};",
 "if(CFG.dayMode===2){CFG.dayCycle=false;CFG.dayMode=0;CFG.dayFixed=1;}if(CFG.dayCycle===undefined)CFG.dayCycle=true;",
 "var PV=document.getElementById('pv'),animT0=null,rafId=null,runPending=false;" +
 "function pvSize(){var w=ENV.platform==='basalt'?144:200,h=ENV.platform==='basalt'?168:228;PV.style.width=(2*w)+'px';PV.style.height=(2*h)+'px';}" +
-"function frame(ts){rafId=null;if(runPending){runPending=false;animT0=ts;}var animMs=animT0===null?null:ts-animT0;" +
+"var RAF=window.requestAnimationFrame?function(f){return window.requestAnimationFrame(f);}:function(f){return setTimeout(function(){f(Date.now());},40);};" +
+"function frame(ts){rafId=null;try{if(runPending){runPending=false;animT0=ts;}var animMs=animT0===null?null:ts-animT0;" +
 "var r=SkiPreview.draw(PV,CFG,ENV,{now:new Date(),animMs:animMs,wxClock:ts/1000});" +
 "if(animT0!==null&&animMs>=r.durationMs)animT0=null;" +
 "var moving=CFG.animMode===0&&ENV.platform!=='basalt'&&SkiPreview.weatherFor(CFG,ENV)>=4;" +
-"if(animT0!==null||moving)rafId=requestAnimationFrame(frame);}" +
-"function redraw(){if(rafId===null)rafId=requestAnimationFrame(frame);}" +
-"pvSize();SkiPreview.draw(PV,CFG,ENV,{now:new Date(),animMs:null,wxClock:0});" +
+"if(animT0!==null||moving)rafId=RAF(frame);}catch(e){animT0=null;}}" +
+"function redraw(){if(rafId===null)rafId=RAF(frame);}" +
+"pvSize();try{SkiPreview.draw(PV,CFG,ENV,{now:new Date(),animMs:null,wxClock:0});}catch(e){animT0=null;}" +
 "document.getElementById('run').onclick=function(){runPending=true;redraw();};",
 "function show(id,v){document.getElementById(id).style.display=v?'':'none';}",
 "function syncRows(){show('wxFixedRow',!CFG.weatherOn);show('dayModeRow',CFG.dayCycle);" +
@@ -70,9 +73,7 @@ var PAGE_JS = [
 "(function(){var a=document.getElementById('fxRise'),b=document.getElementById('fxSet');" +
 "a.value=m2t(CFG.fixedRise);b.value=m2t(CFG.fixedSet);" +
 "a.onchange=function(){CFG.fixedRise=t2m(a.value);redraw();};b.onchange=function(){CFG.fixedSet=t2m(b.value);redraw();};})();",
-"syncRows();",
-"document.getElementById('save').onclick=function(){location.href='pebblejs://close#'+encodeURIComponent(JSON.stringify(CFG));};",
-"document.getElementById('cancel').onclick=function(){location.href='pebblejs://close#';};"
+"syncRows();"
 ].join('\n');
 
 function buildHtml(cfg, env) {
