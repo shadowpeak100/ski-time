@@ -54,7 +54,7 @@ It caches these values in `localStorage` when it sends them to the watch. A fres
 
 ## 5. Size and structure
 
-- **Renderer location:** the renderer lives in a new file, `src/pkjs/preview.js`. It exports the drawing code as one string that `config.js` inlines into the page. The renderer is ES5, with no external scripts.
+- **Renderer location:** the renderer lives in a new file, `src/pkjs/preview.js`. It exports the drawing code as one string that `config.js` inlines into the page. The renderer may use ES2015, which is what the prototype is written in and what current phone webviews run. It loads no external scripts.
 - **Size budget:** the generated page must stay under 120 KB. The prototype's UI, grid and storyboard code is dropped.
 - **Settings untouched:** the existing settings, their message keys and what they send do not change.
 
