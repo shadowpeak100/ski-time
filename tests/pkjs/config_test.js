@@ -38,7 +38,7 @@ function runPage(c, env) {
   };
   var js = page.match(/<script>([\s\S]*)<\/script>/)[1];
   new Function('window', 'document', 'location', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance',
-    js + ';window.CFG=CFG;')(win, win.document, win.location, win.requestAnimationFrame, win.cancelAnimationFrame, win.performance);
+    js + ';window.CFG=CFG;window.SkiPreview=SkiPreview;')(win, win.document, win.location, win.requestAnimationFrame, win.cancelAnimationFrame, win.performance);
   return { els: els, raf: raf, win: win, page: page };
 }
 
@@ -54,9 +54,41 @@ assert.strictEqual(pvImg.width * pvImg.height, 200 * 228, 'preview image size');
 assert(pvImg.data.some(function(v) { return v !== 0; }), 'preview image not blank');
 console.log('page length', r.page.length);
 
-// Run twice: still only one RAF chain pending.
-r.els.run.onclick(); r.els.run.onclick();
-assert.strictEqual(r.raf.length, 1, 'one animation loop after double Run, got ' + r.raf.length);
+// Animation loop: drained, then Run twice leaves one chain that ends after durationMs.
+var lp = runPage(cfg({ animMode: 1, weatherOn: false, wxFixed: 0 }), envE);
+var seen = [], realDraw = lp.win.SkiPreview.draw, durationMs = 0, ts = 1000;
+lp.win.SkiPreview.draw = function(cv, c, env, opts) {
+  var res = realDraw.apply(this, arguments);
+  seen.push({ dayCycle: c.dayCycle, dayFixed: c.dayFixed, animMs: opts.animMs });
+  durationMs = res.durationMs;
+  return res;
+};
+function step() { ts += 40; lp.raf.shift()(ts); }
+while (lp.raf.length) step();
+assert.strictEqual(lp.raf.length, 0, 'drained');
+lp.els.run.onclick(); lp.els.run.onclick();
+assert.strictEqual(lp.raf.length, 1, 'one animation loop after double Run, got ' + lp.raf.length);
+seen = [];
+var frames = 0;
+while (lp.raf.length && frames < 1000) { step(); frames++; }
+assert(lp.raf.length === 0, 'chain stops after the animation');
+assert(frames > 10, 'chain kept going during the animation, frames ' + frames);
+assert(frames * 40 >= durationMs && frames * 40 <= durationMs + 80, 'ran for about durationMs: ' + frames * 40 + ' vs ' + durationMs);
+assert.strictEqual(seen[0].animMs, 0, 'first frame is animMs 0');
+
+// Changing a setting mid-animation draws the next frame with the new value and adds no second chain.
+lp.els.run.onclick();
+step(); step(); step();
+assert.strictEqual(lp.raf.length, 1, 'still animating');
+lp.els.dayCycle_off.onclick();
+lp.els.dayFixed.value = '3'; lp.els.dayFixed.onchange();
+assert(lp.raf.length <= 1, 'setting change left at most one pending frame, got ' + lp.raf.length);
+seen = [];
+step();
+assert.strictEqual(seen.length, 1, 'one draw for one frame');
+assert.strictEqual(seen[0].dayCycle, false, 'frame drew with the new cycle setting');
+assert.strictEqual(seen[0].dayFixed, 3, 'frame drew with the new Show setting');
+assert(seen[0].animMs > 0, 'animation continued rather than restarted');
 
 // Old saved settings (no new fields, legacy dayMode 2) still render.
 var old = { comp1: 1, comp2: 2, comp3: 0, use24: true, lead0: true, tracks: 0, saverOn: false, saverStart: 1320,
