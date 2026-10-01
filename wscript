@@ -32,7 +32,9 @@ def build(ctx):
         if weather:
             ctx.env.append_unique('DEFINES', ['MOCK_WEATHER=%d' % int(weather)])
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
-        ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'),
+        # basalt draws no weather, so its heap does not pay for the weather modules
+        excl = ['src/c/weather.c', 'src/c/bolt.c'] if platform == 'basalt' else []
+        ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c', excl=excl),
                       target=app_elf, bin_type='app')
         binaries.append({'platform': platform, 'app_elf': app_elf})
     ctx.env = cached_env
