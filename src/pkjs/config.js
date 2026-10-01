@@ -62,7 +62,7 @@ var PAGE_JS = [
 "document.getElementById('cancel').onclick=function(){location.href='pebblejs://close#';};"
 ].join('\n');
 
-function buildHtml(cfg) {
+function buildHtml(cfg, env) {
   return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
 '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">' +
 '<title>Ski Time</title><style>' +
@@ -83,7 +83,15 @@ function buildHtml(cfg) {
 '.bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;padding:12px 16px;background:rgba(14,22,34,.95);border-top:1px solid var(--hair);}' +
 '.bar button{flex:1;padding:13px;border-radius:10px;font-size:15px;font-weight:600;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink);}' +
 '.bar button.save{background:var(--accent);color:#04121f;border-color:var(--accent);}' +
-'</style></head><body><div class="wrap"><h1>Ski Time</h1>' +
+'.hdr{display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px;}.hdr h1{margin:0;}' +
+'.kofi{display:flex;align-items:center;gap:5px;background:#ff5e5b;color:#fff;text-decoration:none;' +
+'padding:6px 10px;border-radius:14px;font-size:13px;font-weight:bold;white-space:nowrap;}' +
+'.kofibtn{display:block;text-align:center;padding:12px;border-radius:10px;background:#ff5e5b;color:#fff;' +
+'text-decoration:none;font-weight:600;font-size:15px;}' +
+'</style></head><body><div class="wrap"><div class="hdr"><h1>Ski Time</h1>' +
+'<a class="kofi" href="https://ko-fi.com/shadowpeak100" target="_blank" rel="noopener" title="Support Ski Time on Ko-fi">' +
+'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+'<path d="M4 8h11v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z"/><path d="M15 9h2.5a2.5 2.5 0 0 1 0 5H15"/><path d="M5 21h11"/></svg>Ko-fi</a></div>' +
 '<section><h2>Display</h2>' +
 selRow('Animations', 'animMode', ['Full animations (may use more battery)', 'Balanced', 'Battery saver']) +
 toggleRow('Weather', 'weatherOn') +
@@ -103,6 +111,9 @@ selRow('Show', 'dayFixed', ['Sunrise', 'Midday', 'Sunset', 'Night'], 'dayFixedRo
 toggleRow('Use Battery saver on a schedule', 'saverOn') +
 '<div class="row"><label>From</label><input type="time" id="svStart"></div>' +
 '<div class="row"><label>To</label><input type="time" id="svEnd"></div></section>' +
+'<section><h2>Support</h2><p style="color:var(--muted);font-size:13px;margin:0 0 10px">' +
+'Ski Time is free, with no ads. If it\'s useful to you, you can support development. Thank you!</p>' +
+'<a class="kofibtn" href="https://ko-fi.com/shadowpeak100" target="_blank" rel="noopener">&#9749; Buy me a coffee on Ko-fi</a></section>' +
 '</div><div class="bar"><button id="cancel">Cancel</button><button class="save" id="save">Save</button></div>' +
 '<script>var CFG=' + JSON.stringify(cfg) + ';' + PAGE_JS + '</script></body></html>';
 }
