@@ -2,7 +2,7 @@
 
 A Pebble watch face for basalt (Pebble Time) and emery (Pebble Time 2). A ski slope falls from the
 top right to the bottom left, and small skiers carve the time into the snow as curly script digits.
-Each minute the old skiers ski out, an avalanche clears the slope, and new skiers draw the new time.
+Each minute the old skiers ski out, an avalanche clears the slope, and new skiers draw the new time. The same animation plays one second after the face opens (except in Battery saver).
 Design spec: `docs/superpowers/specs/2026-09-29-ski-time-design.md`.
 
 ## Features

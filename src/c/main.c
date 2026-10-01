@@ -354,6 +354,15 @@ static void build_skiers(void) {
 #endif
 }
 
+// Replays the minute change on the current time each time the face opens, as constellation does.
+#define INTRO_DELAY_MS 1000
+static AppTimer *s_intro_timer;
+static void intro_cb(void *data) {
+  (void)data;
+  s_intro_timer = NULL;
+  if (!s_saver && !s_anim) anim_start();
+}
+
 static void window_load(Window *w) {
   Layer *root = window_get_root_layer(w);
   GRect bounds = layer_get_bounds(root);
@@ -366,11 +375,15 @@ static void window_load(Window *w) {
   layer_add_child(root, s_layer);
   { int h, m; now_hm(&h, &m); s_last_min = h * 60 + m; }
   apply_mode(mode_now());
+#ifndef MOCK_ANIM_MS
+  s_intro_timer = app_timer_register(INTRO_DELAY_MS, intro_cb, NULL);
+#endif
 }
 
 static void window_unload(Window *w) {
   (void)w;
   tick_timer_service_unsubscribe();
+  if (s_intro_timer) { app_timer_cancel(s_intro_timer); s_intro_timer = NULL; }
   anim_stop();
 #ifdef PBL_PLATFORM_EMERY
   rest_timer_cancel();

@@ -7,7 +7,7 @@
 #include "layout.h"
 #include "glyphs.h"
 
-#define SKI_DRAW_START_MS 1450
+#define SKI_DRAW_START_MS 2600
 #define SKI_STAGGER_MS 200
 #define SKI_PAIR_MS 150
 #define SKI_STOP_MS 300

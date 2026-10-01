@@ -159,7 +159,7 @@ static void check_set(const SkierSet *set, const Layout *L) {
   CHECK(!set->truncated);
   CHECK(set->pool_used <= set->pool_cap);
   uint16_t d = skiers_duration(set);
-  CHECK(d >= 3500 && d <= 6000);
+  CHECK(d >= 4500 && d <= 7500);
   for (uint8_t i = 0; i < set->count; i++) {
     const Skier *s = &set->sk[i];
     CHECK(s->n > s->s_idx && s->s_idx > 0);
@@ -250,7 +250,7 @@ static void test_aval_timing(void) {
   AvalFrame A;
   aval_frame(&A, &L, AV_FLOW_START_MS - 1); CHECK(!A.active);
   aval_frame(&A, &L, AV_FLOW_END_MS + AV_FADE_MS + 1); CHECK(!A.active);
-  aval_frame(&A, &L, 1000); CHECK(A.active);
+  aval_frame(&A, &L, (AV_FLOW_START_MS + AV_FLOW_END_MS) / 2); CHECK(A.active);
   CHECK(A.a > 0 && A.a < 1);
 }
 
@@ -270,8 +270,8 @@ static void test_aval_pixels(void) {
   Layout L; layout_init(&L, 200, 228);
   uint8_t st[AV_MAX_S]; aval_streaks(st);
   AvalFrame A;
-  aval_frame(&A, &L, 900);                                 // front still near the top right
-  CHECK_EQ_INT(aval_pixel(&A, st, L.k, 5, 190, 900), AV_NONE);   // bottom left untouched
+  aval_frame(&A, &L, AV_FLOW_START_MS + 200);              // front still near the top right
+  CHECK_EQ_INT(aval_pixel(&A, st, L.k, 5, 190, AV_FLOW_START_MS + 200), AV_NONE);   // bottom left untouched
   aval_frame(&A, &L, AV_FLOW_END_MS);                      // front at the bottom left
   AvPix p = aval_pixel(&A, st, L.k, 170, 60, AV_FLOW_END_MS);    // top right, long passed
   CHECK(p == AV_RESTORE || p == AV_CELESTE);

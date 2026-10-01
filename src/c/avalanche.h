@@ -5,10 +5,10 @@
 #include <stdbool.h>
 #include "layout.h"
 
-#define AV_CRACK_MS 550
-#define AV_FLOW_START_MS 700
-#define AV_FLOW_END_MS 1650
-#define AV_FADE_MS 300
+#define AV_CRACK_MS 800
+#define AV_FLOW_START_MS 1000
+#define AV_FLOW_END_MS 2800
+#define AV_FADE_MS 450
 #define AV_MAX_S 320
 
 typedef enum { AV_NONE = 0, AV_SHADOW, AV_RESTORE, AV_WHITE, AV_CELESTE, AV_BLUE } AvPix;
