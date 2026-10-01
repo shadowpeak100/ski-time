@@ -118,4 +118,17 @@ toggleRow('Use Battery saver on a schedule', 'saverOn') +
 '<script>var CFG=' + JSON.stringify(cfg) + ';' + PAGE_JS + '</script></body></html>';
 }
 
-module.exports = { DEFAULTS: DEFAULTS, toMessage: toMessage, buildHtml: buildHtml };
+// Preview inputs from the phone's cache; junk or missing values fall back to clear, calm, 07:00-19:00.
+function envFrom(stored, platform) {
+  function int(v, lo, hi, dflt) { return typeof v === 'number' && v % 1 === 0 && v >= lo && v <= hi ? v : dflt; }
+  stored = stored || {};
+  return {
+    platform: platform === 'basalt' ? 'basalt' : 'emery',
+    wmo: int(stored.wx, 0, 99, 0),
+    wind: int(stored.wind, -1, 1, 0),
+    rise: int(stored.rise, 0, 1439, 420),
+    set: int(stored.set, 0, 1439, 1140)
+  };
+}
+
+module.exports = { DEFAULTS: DEFAULTS, toMessage: toMessage, buildHtml: buildHtml, envFrom: envFrom };

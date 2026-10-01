@@ -7,6 +7,25 @@ var config = require('./config');
 var REFRESH_MS = 30 * 60 * 1000;   // 30 minutes
 var REQUEST_TIMEOUT_MS = 15000;
 
+// The settings preview shows the last weather and sun times the watch was sent.
+function cachePreview(msg) {
+  try {
+    var p = JSON.parse(localStorage.getItem('preview') || '{}');
+    if ('WX_CODE' in msg) p.wx = msg.WX_CODE;
+    if ('WIND_X' in msg) p.wind = msg.WIND_X;
+    if ('SUNRISE' in msg) { p.rise = msg.SUNRISE; p.set = msg.SUNSET; }
+    localStorage.setItem('preview', JSON.stringify(p));
+  } catch (e) { logErr('cachePreview', e); }
+}
+
+function previewEnv() {
+  var stored = {}, platform;
+  try { stored = JSON.parse(localStorage.getItem('preview') || '{}'); } catch (e) { logErr('previewEnv', e); }
+  try { var info = Pebble.getActiveWatchInfo && Pebble.getActiveWatchInfo(); platform = info && info.platform; }
+  catch (e) { logErr('watchInfo', e); }
+  return config.envFrom(stored, platform);
+}
+
 function logErr(prefix, e) {
   console.log('[ski-time] ' + prefix + ': ' + (e && e.message ? e.message : e));
 }
@@ -67,6 +86,7 @@ function fetchWeather() {
                 msg.SUNSET = ss;
               }
             }
+            cachePreview(msg);
             sendWeather(msg);
           } catch (e) { logErr('parse', e); }
         } else {
@@ -104,7 +124,7 @@ function loadCfg() {
 
 Pebble.addEventListener('showConfiguration', function() {
   Pebble.openURL('data:text/html;charset=utf-8,' +
-                 encodeURIComponent(config.buildHtml(loadCfg())));
+                 encodeURIComponent(config.buildHtml(loadCfg(), previewEnv())));
 });
 
 Pebble.addEventListener('webviewclosed', function(e) {
