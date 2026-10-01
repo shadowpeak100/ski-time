@@ -13,6 +13,7 @@ Design spec: `docs/superpowers/specs/2026-09-29-ski-time-design.md`.
 - Times of day: sunrise, midday, sunset and night each have their own sky, with a moon and stars at night. Emery also gets window glow, floodlights, a campfire and slope trees that skiers pass behind.
 - Animations setting: Full, Balanced or Battery saver, plus an optional Battery saver schedule.
 - Weather comes from the phone (PebbleKit JS) and shows `--` until the first sync.
+- The settings page shows a live preview of the face (tap **Run animation** to see a minute change) and has Ko-fi links to support development.
 
 ## Time of day
 
