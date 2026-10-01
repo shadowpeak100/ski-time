@@ -42,18 +42,28 @@ static void dot(GContext *ctx, int x, int y, int w, int h, GColor c) {
   graphics_fill_rect(ctx, GRect(x, y, w, h), 0, GCornerNone);
 }
 
+static GPoint crack_pt(const Layout *L, float s, float step) {
+  float j = ((fb_round(s / step) & 1) ? 1 : -1) * 1.1f * L->k;
+  Vec2 q = pt(L->u0 + j, L->s0 + s);
+  return GPoint(fb_floor(q.x), fb_floor(q.y));
+}
+
+// The crack runs across the visible slope from its upper-left end, easing out, over AV_CRACK_DRAW_MS.
 static void draw_crack(GContext *ctx, const Layout *L, uint16_t t) {
-  float k = L->k, grow = (t - AV_CRACK_MS) / 150.0f, step = 2.5f * k;
+  float k = L->k, grow = (t - AV_CRACK_MS) / (float)AV_CRACK_DRAW_MS, step = 2.5f * k, half = 70 * k;
   if (grow > 1) grow = 1;
-  float half = 70 * k * grow;
+  grow = 1 - (1 - grow) * (1 - grow);
+  float lo = half, hi = -half;   // the part of the line that lies on the slope
+  for (float s = -half; s <= half; s += step)
+    if (on_slope(L, crack_pt(L, s, step))) { if (s < lo) lo = s; hi = s; }
+  if (hi < lo) return;
+  float end = lo + (hi - lo) * grow;
   graphics_context_set_stroke_width(ctx, 1);
   graphics_context_set_stroke_color(ctx, GColorLiberty);
   GPoint prev = GPointZero;
   bool have = false;
-  for (float s = -half; s <= half; s += step) {
-    float j = ((fb_round(s / step) & 1) ? 1 : -1) * 1.1f * k;
-    Vec2 q = pt(L->u0 + j, L->s0 + s);
-    GPoint p = GPoint(fb_floor(q.x), fb_floor(q.y));
+  for (float s = -half; s <= end; s += step) {
+    GPoint p = crack_pt(L, s, step);
     if (have && on_slope(L, prev) && on_slope(L, p)) graphics_draw_line(ctx, prev, p);
     prev = p; have = true;
   }

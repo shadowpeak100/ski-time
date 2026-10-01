@@ -5,7 +5,8 @@
 #include <stdbool.h>
 #include "layout.h"
 
-#define AV_CRACK_MS 800
+#define AV_CRACK_MS 450
+#define AV_CRACK_DRAW_MS 500
 #define AV_FLOW_START_MS 1000
 #define AV_FLOW_END_MS 2800
 #define AV_FADE_MS 450
