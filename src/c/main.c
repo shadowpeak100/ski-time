@@ -11,6 +11,7 @@
 #include "saver.h"
 #include "daypart.h"
 #include "theme.h"
+#include "wx_draw.h"
 
 #define PERSIST_KEY_TEMP_F 0
 #define PERSIST_KEY_SUN 2   // key 1 is Settings
@@ -36,6 +37,12 @@ static uint16_t s_sun_rise = 420, s_sun_set = 1140;   // phone data, minutes of 
 static float s_moon;                                  // phase for the cached date
 static int s_moon_yday = -1;
 #define ANIM_FRAME_MS 40
+#ifdef PBL_PLATFORM_EMERY
+static int8_t s_wind = -1;        // temporary until the phone sends WIND_X (Task 5)
+static bool s_wx_still = true;    // temporary: effective mode != ANIM_FULL (Task 5)
+#endif
+
+static uint32_t now_ms(void);
 
 static bool render_frame(GContext *ctx, const Frame *f) {   // true if the background was rebuilt
   const Layout *L = &s_L;
@@ -68,6 +75,7 @@ static bool render_frame(GContext *ctx, const Frame *f) {   // true if the backg
   }
 #ifdef PBL_PLATFORM_EMERY
   scene_draw_slope_trees(ctx, L);
+  wx_draw(ctx, L, scene_weather(), theme_daypart(scene_theme()), s_wx_still, s_wind, s_wx_still ? s_smoke_ms : now_ms());
 #endif
   return rebuilt;
 }
