@@ -11,7 +11,7 @@ Design spec: `docs/superpowers/specs/2026-09-29-ski-time-design.md`.
 - 12-hour or 24-hour time, with an optional leading zero.
 - Track style: twin grooves or a solid line.
 - Times of day: sunrise, midday, sunset and night each have their own sky, with a moon and stars at night. Emery also gets window glow, floodlights, a campfire and slope trees that skiers pass behind.
-- Battery saver: during a chosen time window the face stops animating.
+- Animations setting: Full, Balanced or Battery saver, plus an optional Battery saver schedule.
 - Weather comes from the phone (PebbleKit JS) and shows `--` until the first sync.
 
 ## Time of day
@@ -21,6 +21,29 @@ sunrise and sunset times, or always midday. Follow mode uses sunrise and sunset 
 fetched by the phone with the weather and kept on the watch. Until the first sync it assumes 07:00 and 19:00.
 Basalt keeps the themes, moon and stars; the night extras and slope trees are Emery only.
 Spec: `docs/superpowers/specs/2026-09-29-times-of-day-design.md`.
+
+## Weather and animation modes
+
+On Emery the sky shows the forecast weather: clouds, overcast, fog, drizzle, rain, snow and thunderstorm
+with a lightning bolt. A new weather applies at the next minute change. Basalt does not draw weather.
+Spec: `docs/superpowers/specs/2026-09-30-weather-design.md`.
+
+- **Show weather**: turns the weather scene off.
+- **Animations**:
+  - Full: rain, drizzle and snow fall, and the bolt flickers. This may use more battery.
+  - Balanced (default): the minute change is animated, but precipitation is held still and the bolt stays on.
+  - Battery saver: held still, the minute change is instant, and seconds show `-`.
+- **Use Battery saver on a schedule**: inside the chosen window (default 22:00 to 07:00) the face uses Battery saver.
+
+To capture weather screenshots, add `MOCK_WEATHER=0..7` (clear, partly cloudy, overcast, fog, drizzle, rain, snow,
+storm) and `MOCK_ANIM_MODE=0..2` (Full, Balanced, saver) to the build:
+
+```sh
+pebble kill; pebble wipe
+MOCK_TIME=12:30 MOCK_DAYPART=1 MOCK_WEATHER=7 MOCK_ANIM_MODE=1 pebble build
+pebble install --emulator emery
+pebble screenshot --emulator emery storm.png
+```
 
 ## Build & run
 
