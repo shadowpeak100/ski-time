@@ -3,6 +3,7 @@
 #define PERSIST_KEY_SETTINGS 1   // key 0 is the weather temperature (main.c)
 
 #define PHASE1_SETTINGS_SIZE 12
+#define PHASE2_SETTINGS_SIZE 16
 
 static Settings s;
 
@@ -17,22 +18,17 @@ static const Settings DEFAULTS = {
   .daypart_mode = 0,
   .fixed_rise = 420,
   .fixed_set = 1140,
+  .anim_mode = 1,   // ANIM_BALANCED
+  .weather_on = 1,
 };
 
 void settings_load(void) {
-  if (persist_exists(PERSIST_KEY_SETTINGS) &&
-      persist_get_size(PERSIST_KEY_SETTINGS) == (int)sizeof(Settings)) {
-    persist_read_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
-  } else if (persist_exists(PERSIST_KEY_SETTINGS) && persist_get_size(PERSIST_KEY_SETTINGS) == PHASE1_SETTINGS_SIZE) {
-    s = DEFAULTS;   // the phase 1 layout is an exact prefix of this one (the pad byte before saver_start is now daypart_mode)
-    persist_read_data(PERSIST_KEY_SETTINGS, &s, PHASE1_SETTINGS_SIZE);
-    s.daypart_mode = 0;
-    s.fixed_rise = DEFAULTS.fixed_rise;
-    s.fixed_set = DEFAULTS.fixed_set;
-    persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
-  } else {
-    s = DEFAULTS;
-  }
+  int n = persist_exists(PERSIST_KEY_SETTINGS) ? persist_get_size(PERSIST_KEY_SETTINGS) : 0;
+  s = DEFAULTS;
+  if (n != (int)sizeof(Settings) && n != PHASE2_SETTINGS_SIZE && n != PHASE1_SETTINGS_SIZE) return;
+  persist_read_data(PERSIST_KEY_SETTINGS, &s, n);   // the phase 1 and 2 layouts are exact prefixes of this one
+  if (n == PHASE1_SETTINGS_SIZE) s.daypart_mode = 0;   // was the pad byte before saver_start
+  if (n != (int)sizeof(Settings)) persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
 }
 
 static bool set_u8(DictionaryIterator *it, uint32_t key, uint8_t *dst) {
@@ -62,6 +58,8 @@ bool settings_apply_message(DictionaryIterator *it) {
   changed |= set_u8(it, MESSAGE_KEY_DAYPART_MODE, &s.daypart_mode);
   changed |= set_u16(it, MESSAGE_KEY_SUN_FIXED_RISE, &s.fixed_rise);
   changed |= set_u16(it, MESSAGE_KEY_SUN_FIXED_SET, &s.fixed_set);
+  changed |= set_u8(it, MESSAGE_KEY_ANIM_MODE, &s.anim_mode);
+  changed |= set_u8(it, MESSAGE_KEY_WEATHER_ON, &s.weather_on);
   if (changed) persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
   return changed;
 }

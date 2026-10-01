@@ -20,6 +20,8 @@ typedef struct {
   uint8_t  daypart_mode;             // DaypartMode
   uint16_t saver_start, saver_end;   // minutes-of-day
   uint16_t fixed_rise, fixed_set;    // minutes-of-day, used in fixed mode
+  uint8_t  anim_mode;                // AnimMode
+  uint8_t  weather_on;
 } Settings;
 
 void settings_load(void);

@@ -24,6 +24,16 @@ function minutesOfDay(s) {
   return +s.substr(11, 2) * 60 + +s.substr(14, 2);
 }
 
+// -1 blowing west, +1 blowing east, 0 calm (< 5 km/h); null when unknown.
+// Open-Meteo gives the direction the wind comes FROM, so the wind blows toward dir + 180.
+function windX(speed, dir) {
+  if (typeof speed !== 'number' || !isFinite(speed)) return null;
+  if (speed < 5) return 0;
+  if (typeof dir !== 'number' || !isFinite(dir)) return null;
+  var toward = ((dir + 180) % 360 + 360) % 360;
+  return toward >= 180 ? -1 : 1;
+}
+
 function fetchWeather() {
   navigator.geolocation.getCurrentPosition(
     function(pos) {
@@ -32,7 +42,7 @@ function fetchWeather() {
       var url = 'https://api.open-meteo.com/v1/forecast' +
                 '?latitude=' + lat +
                 '&longitude=' + lon +
-                '&current=temperature_2m' +
+                '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m' +
                 '&temperature_unit=fahrenheit' +
                 '&daily=sunrise,sunset&timezone=auto&forecast_days=1';
       var req = new XMLHttpRequest();
@@ -44,6 +54,10 @@ function fetchWeather() {
             var data = JSON.parse(req.responseText);
             var t = Math.round(data.current.temperature_2m);
             var msg = { TEMP_F: t };
+            var code = data.current.weather_code;
+            if (typeof code === 'number' && isFinite(code) && code % 1 === 0 && code >= 0 && code <= 99) msg.WX_CODE = code;
+            var wind = windX(data.current.wind_speed_10m, data.current.wind_direction_10m);
+            if (wind !== null) msg.WIND_X = wind;
             var rise = data.daily && data.daily.sunrise && data.daily.sunrise[0];
             var set = data.daily && data.daily.sunset && data.daily.sunset[0];
             if (rise && set) {

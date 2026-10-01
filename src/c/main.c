@@ -15,6 +15,7 @@
 
 #define PERSIST_KEY_TEMP_F 0
 #define PERSIST_KEY_SUN 2   // key 1 is Settings
+#define PERSIST_KEY_WX 3
 
 typedef struct { const SkierSet *old; const SkierSet *neu; uint16_t t; } Frame;   // old == NULL -> resting
 
@@ -25,6 +26,7 @@ static bool s_scene_ok;
 static TrackStyle s_track_style = TRACK_TWIN;
 static uint32_t s_smoke_ms, s_smoke_base;   // base advances only while animating
 static bool s_saver;
+static uint8_t s_mode = ANIM_BALANCED;   // effective AnimMode
 static int s_last_min = -1;
 static SkierSet s_set_a, s_set_b;
 static SkPt *s_pool_a, *s_pool_b;
@@ -37,9 +39,11 @@ static uint16_t s_sun_rise = 420, s_sun_set = 1140;   // phone data, minutes of 
 static float s_moon;                                  // phase for the cached date
 static int s_moon_yday = -1;
 #define ANIM_FRAME_MS 40
-#ifdef PBL_PLATFORM_EMERY
-static int8_t s_wind = -1;        // temporary until the phone sends WIND_X (Task 5)
-static bool s_wx_still = true;    // temporary: effective mode != ANIM_FULL (Task 5)
+#ifdef PBL_PLATFORM_EMERY   // basalt draws no weather, so it neither stores it nor links weather.c
+typedef struct { int16_t wmo; int8_t wind; } WxSaved;   // persisted under PERSIST_KEY_WX
+static WxSaved s_wx;                  // phone data, applied at the next apply_theme(); clear until some arrives
+#define REST_FRAME_MS 100
+static AppTimer *s_rest_timer;        // Full mode only, never alongside s_anim_timer
 #endif
 
 static uint32_t now_ms(void);
@@ -75,7 +79,8 @@ static bool render_frame(GContext *ctx, const Frame *f) {   // true if the backg
   }
 #ifdef PBL_PLATFORM_EMERY
   scene_draw_slope_trees(ctx, L);
-  wx_draw(ctx, L, scene_weather(), theme_daypart(scene_theme()), s_wx_still, s_wind, s_wx_still ? s_smoke_ms : now_ms());
+  bool still = s_mode != ANIM_FULL;
+  wx_draw(ctx, L, scene_weather(), theme_daypart(scene_theme()), still, s_wx.wind, still ? s_smoke_ms : now_ms());
 #endif
   return rebuilt;
 }
@@ -135,8 +140,34 @@ static void apply_theme(void) {
   scene_set_theme(theme_for(dp), moon);
 #ifdef MOCK_WEATHER
   scene_set_weather(MOCK_WEATHER);
+#elif defined(PBL_PLATFORM_EMERY)
+  scene_set_weather(settings_get()->weather_on ? wx_from_wmo(s_wx.wmo) : WX_CLEAR);
 #endif
 }
+
+#ifdef PBL_PLATFORM_EMERY
+static void rest_timer_update(void);
+
+static void rest_timer_cancel(void) {
+  if (s_rest_timer) { app_timer_cancel(s_rest_timer); s_rest_timer = NULL; }
+}
+
+static void rest_timer_cb(void *data) {
+  (void)data;
+  s_rest_timer = NULL;
+  if (s_layer) layer_mark_dirty(s_layer);
+  rest_timer_update();
+}
+
+// The only place the rest timer is registered: Full mode, moving weather, no minute animation.
+static void rest_timer_update(void) {
+  bool want = s_layer && s_mode == ANIM_FULL && !s_anim && settings_get()->weather_on && wx_moves(scene_weather());
+  if (!want) rest_timer_cancel();
+  else if (!s_rest_timer) s_rest_timer = app_timer_register(REST_FRAME_MS, rest_timer_cb, NULL);
+}
+#else
+static inline void rest_timer_update(void) {}
+#endif
 
 static void anim_stop(void) {
   if (s_anim) s_smoke_base += now_ms() - s_anim_start_ms;
@@ -145,6 +176,7 @@ static void anim_stop(void) {
   s_anim = false;
   s_old = NULL;
   if (s_layer) layer_mark_dirty(s_layer);
+  rest_timer_update();
 }
 
 static void anim_timer_cb(void *data) {
@@ -168,6 +200,7 @@ static void rebuild_current(void) {
   apply_theme();
   SkierSet *target = s_new == &s_set_a ? &s_set_b : &s_set_a;
   if (build_set(target, h, m)) s_new = target;
+  rest_timer_update();   // the weather may have changed
 }
 
 static void anim_start(void) {
@@ -177,10 +210,11 @@ static void anim_start(void) {
   int h, m;
   now_hm(&h, &m);
   apply_theme();   // before the first animated frame
-  if (!build_set(target, h, m)) return;
+  if (!build_set(target, h, m)) { rest_timer_update(); return; }
   s_old = s_new;
   s_new = target;
   s_anim = true;
+  rest_timer_update();   // cancels the rest timer: the 40 ms frame timer takes over
   s_anim_start_ms = now_ms();
   s_anim_first_frame = true;
   s_smoke_ms = s_smoke_base;
@@ -191,25 +225,32 @@ static void anim_start(void) {
 
 static void tick_handler(struct tm *tm, TimeUnits changed);
 
-static void apply_saver(bool on) {
+static void apply_mode(uint8_t mode) {
+  bool on = mode == ANIM_SAVER;
+  s_mode = mode;
   s_saver = on;
   comps_set_saver(on);
   if (on) anim_stop();
   tick_timer_service_subscribe(!on && comps_needs_seconds() ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
   if (s_layer) layer_mark_dirty(s_layer);
+  rest_timer_update();
 }
 
-static bool saver_now(void) {
+static uint8_t mode_now(void) {
+#ifdef MOCK_ANIM_MODE
+  return MOCK_ANIM_MODE;
+#else
   int h, m;
   now_hm(&h, &m);
   const Settings *st = settings_get();
-  return saver_active(st->saver_enabled, st->saver_start, st->saver_end, h, m);
+  return effective_anim_mode(st->anim_mode, st->saver_enabled, st->saver_start, st->saver_end, h, m);
+#endif
 }
 
 static void tick_handler(struct tm *tm, TimeUnits changed) {
   (void)changed;
-  bool saver = saver_now();
-  if (saver != s_saver) apply_saver(saver);
+  uint8_t mode = mode_now();
+  if (mode != s_mode) apply_mode(mode);
   if (s_layer) layer_mark_dirty(s_layer);
   int hm = tm->tm_hour * 60 + tm->tm_min;
   if (hm == s_last_min) return;
@@ -242,12 +283,22 @@ static void inbox_received(DictionaryIterator *it, void *ctx) {
     if (persist_read_data(PERSIST_KEY_SUN, saved, sizeof(saved)) != (int)sizeof(saved) || saved[0] != sun[0] || saved[1] != sun[1])
       persist_write_data(PERSIST_KEY_SUN, sun, sizeof(sun));
   }
+#ifdef PBL_PLATFORM_EMERY
+  Tuple *code = dict_find(it, MESSAGE_KEY_WX_CODE), *wind = dict_find(it, MESSAGE_KEY_WIND_X);
+  if (code || wind) {   // takes effect at the next minute change
+    WxSaved wx = s_wx;
+    if (code && code->value->int32 >= 0 && code->value->int32 <= 99) wx.wmo = (int16_t)code->value->int32;
+    if (wind && wind->value->int32 >= -1 && wind->value->int32 <= 1) wx.wind = (int8_t)wind->value->int32;
+    if (wx.wmo != s_wx.wmo || wx.wind != s_wx.wind) persist_write_data(PERSIST_KEY_WX, &wx, sizeof(wx));
+    s_wx = wx;
+  }
+#endif
   if (settings_apply_message(it)) {
     s_track_style = settings_get()->track_style == TRACK_SOLID ? TRACK_SOLID : TRACK_TWIN;
     anim_stop();
     rebuild_current();
     update_health();
-    apply_saver(saver_now());
+    apply_mode(mode_now());
   }
   if (s_layer) layer_mark_dirty(s_layer);
 }
@@ -307,13 +358,16 @@ static void window_load(Window *w) {
   layer_set_update_proc(s_layer, update);
   layer_add_child(root, s_layer);
   { int h, m; now_hm(&h, &m); s_last_min = h * 60 + m; }
-  apply_saver(saver_now());
+  apply_mode(mode_now());
 }
 
 static void window_unload(Window *w) {
   (void)w;
   tick_timer_service_unsubscribe();
   anim_stop();
+#ifdef PBL_PLATFORM_EMERY
+  rest_timer_cancel();
+#endif
   layer_destroy(s_layer);
   s_layer = NULL;
   free(s_pool_a); free(s_pool_b);
@@ -330,6 +384,13 @@ static void init(void) {
     persist_read_data(PERSIST_KEY_SUN, sun, sizeof(sun));
     s_sun_rise = sun[0]; s_sun_set = sun[1];
   }
+#ifdef PBL_PLATFORM_EMERY
+  if (persist_get_size(PERSIST_KEY_WX) == (int)sizeof(s_wx)) {
+    persist_read_data(PERSIST_KEY_WX, &s_wx, sizeof(s_wx));
+    if (s_wx.wmo < 0 || s_wx.wmo > 99) s_wx.wmo = 0;
+    if (s_wx.wind < -1 || s_wx.wind > 1) s_wx.wind = 0;
+  }
+#endif
   update_health();
   app_message_register_inbox_received(inbox_received);
   app_message_open(160, 16);
