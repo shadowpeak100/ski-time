@@ -104,7 +104,7 @@ On the settings page:
 - **Background (Emery):** clouds, the deck and fog are baked into the background during the existing rebuild.
 - **Per frame (Emery):** rain, snow, the bolt and the flash are drawn each frame after the slope trees, and never at or below `comp_top − 2`.
 - **Full-mode rest timer:** 100 ms. It runs only when all of these hold: weather is on, the weather has precipitation or lightning, the effective mode is Full, and no minute animation is running. A minute animation's own 40 ms timer takes over while it runs.
-- **Memory:** basalt compiles no weather drawing (`PBL_PLATFORM_EMERY`) and its heap rule stays at least 3232 B at rest. Emery must log its heap at rest.
+- **Memory:** basalt compiles no weather drawing (`PBL_PLATFORM_EMERY`) and its heap stays at least 2720 B at rest (measured 3004 B). Emery must log its heap at rest.
 
 ## 8. Testing
 

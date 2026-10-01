@@ -83,7 +83,7 @@ bool wx_rain_drop(const Layout *L, const WxDef *d, int i, float t, bool still, i
   const float k = L->k, top = L->comp_top - 2, span = top + 20, slant = 0.3f * wind, len = d->len * k;
   const float x0 = hsh(i, 0xA1u) * (L->W + 40) - (wind > 0 ? 40 : wind == 0 ? 20 : 0);
   const float y = fmodp(hsh(i, 0xB7u) * span + t * d->speed * k, span) - 10;
-  if (y + len > top) return false;
+  if (y + len >= top) return false;
   const float x = x0 + (y + 10) * slant;
   *a = (Vec2){ x, y }; *b = (Vec2){ x + len * slant, y + len };
   return true;

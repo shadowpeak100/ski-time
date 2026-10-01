@@ -25,7 +25,7 @@ Spec: `docs/superpowers/specs/2026-09-29-times-of-day-design.md`.
 ## Weather and animation modes
 
 On Emery the sky shows the forecast weather: clouds, overcast, fog, drizzle, rain, snow and thunderstorm
-with a lightning bolt. A new weather applies at the next minute change. Basalt does not draw weather.
+with a lightning bolt. A new weather applies at the next minute change. Basalt does not draw weather, but it still honours the Animations setting, including Battery saver.
 Spec: `docs/superpowers/specs/2026-09-30-weather-design.md`.
 
 - **Show weather**: turns the weather scene off.
@@ -33,9 +33,9 @@ Spec: `docs/superpowers/specs/2026-09-30-weather-design.md`.
   - Full: rain, drizzle and snow fall, and the bolt flickers. This may use more battery.
   - Balanced (default): the minute change is animated, but precipitation is held still and the bolt stays on.
   - Battery saver: held still, the minute change is instant, and seconds show `-`.
-- **Use Battery saver on a schedule**: inside the chosen window (default 22:00 to 07:00) the face uses Battery saver.
+- **Use Battery saver on a schedule** (off by default): inside the chosen window (default 22:00 to 07:00) the face uses Battery saver.
 
-To capture weather screenshots, add `MOCK_WEATHER=0..7` (clear, partly cloudy, overcast, fog, drizzle, rain, snow,
+These build defines are for screenshots and testing only. To capture weather screenshots, add `MOCK_WEATHER=0..7` (clear, partly cloudy, overcast, fog, drizzle, rain, snow,
 storm) and `MOCK_ANIM_MODE=0..2` (Full, Balanced, saver) to the build:
 
 ```sh

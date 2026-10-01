@@ -43,6 +43,7 @@ static int s_moon_yday = -1;
 typedef struct { int16_t wmo; int8_t wind; } WxSaved;   // persisted under PERSIST_KEY_WX
 static WxSaved s_wx;                  // phone data, applied at the next apply_theme(); clear until some arrives
 #define REST_FRAME_MS 100
+#define REST_BOLT_FRAME_MS 25   // samples the bolt double flicker near the start of its 5 s cycle
 static AppTimer *s_rest_timer;        // Full mode only, never alongside s_anim_timer
 #endif
 
@@ -163,7 +164,11 @@ static void rest_timer_cb(void *data) {
 static void rest_timer_update(void) {
   bool want = s_layer && s_mode == ANIM_FULL && !s_anim && settings_get()->weather_on && wx_moves(scene_weather());
   if (!want) rest_timer_cancel();
-  else if (!s_rest_timer) s_rest_timer = app_timer_register(REST_FRAME_MS, rest_timer_cb, NULL);
+  else if (!s_rest_timer) {
+    const uint32_t c = now_ms() % 5000;
+    const bool flicker = wx_def(scene_weather())->lightning && (c >= 4900 || c < 340);
+    s_rest_timer = app_timer_register(flicker ? REST_BOLT_FRAME_MS : REST_FRAME_MS, rest_timer_cb, NULL);
+  }
 }
 #else
 static inline void rest_timer_update(void) {}

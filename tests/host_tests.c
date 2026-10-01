@@ -522,7 +522,7 @@ static void test_precip_geometry(void) {
     if (d->precip == PRECIP_NONE) continue;
     for (int still = 0; still < 2; still++) for (int8_t wind = -1; wind <= 1; wind++)
       for (float t = 0; t < 20; t += 0.37f) for (int i = 0; i < wx_drop_count(d, still); i++) {
-        if (d->precip == PRECIP_RAIN) { Vec2 a, b; if (wx_rain_drop(&L, d, i, t, still, wind, &a, &b)) CHECK(a.y <= top && b.y <= top); }
+        if (d->precip == PRECIP_RAIN) { Vec2 a, b; if (wx_rain_drop(&L, d, i, t, still, wind, &a, &b)) CHECK(a.y < top && b.y < top); }
         else { int16_t x, y; bool big; if (wx_flake(&L, d, i, t, still, wind, &x, &y, &big)) CHECK(y <= top - 3 && x >= 0 && x < 200); }
       }
   }
