@@ -12,8 +12,9 @@ Daypart daypart_at(int m, uint16_t sr, uint16_t ss) {
   return since_rise_window < span ? DAY_MIDDAY : DAY_NIGHT;   // wrap-aware: sunset may precede sunrise
 }
 
-Daypart daypart_for(uint8_t mode, int m, uint16_t pr, uint16_t ps, uint16_t fr, uint16_t fs) {
-  if (mode == DPM_ALWAYS_DAY) return DAY_MIDDAY;
+Daypart daypart_for(uint8_t mode, int m, uint16_t pr, uint16_t ps, uint16_t fr, uint16_t fs,
+                    uint8_t static_part) {
+  if (mode == DPM_STATIC) return static_part > DAY_NIGHT ? DAY_MIDDAY : (Daypart)static_part;
   return mode == DPM_FIXED ? daypart_at(m, fr, fs) : daypart_at(m, pr, ps);
 }
 

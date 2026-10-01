@@ -310,10 +310,12 @@ static void test_daypart_windows(void) {
 }
 
 static void test_daypart_modes(void) {
-  CHECK_EQ_INT(daypart_for(DPM_ALWAYS_DAY, 0, 442, 1158, 420, 1140), DAY_MIDDAY);
-  CHECK_EQ_INT(daypart_for(DPM_FOLLOW, 442, 442, 1158, 600, 900), DAY_SUNRISE);
-  CHECK_EQ_INT(daypart_for(DPM_FIXED, 442, 442, 1158, 600, 900), DAY_NIGHT);
-  CHECK_EQ_INT(daypart_for(DPM_FIXED, 600, 442, 1158, 600, 900), DAY_SUNRISE);
+  CHECK_EQ_INT(daypart_for(DPM_STATIC, 0, 442, 1158, 420, 1140, DAY_NIGHT), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_for(DPM_STATIC, 720, 442, 1158, 420, 1140, DAY_SUNSET), DAY_SUNSET);
+  CHECK_EQ_INT(daypart_for(DPM_STATIC, 720, 442, 1158, 420, 1140, 9), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_for(DPM_FOLLOW, 442, 442, 1158, 600, 900, DAY_NIGHT), DAY_SUNRISE);
+  CHECK_EQ_INT(daypart_for(DPM_FIXED, 442, 442, 1158, 600, 900, DAY_MIDDAY), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_for(DPM_FIXED, 600, 442, 1158, 600, 900, DAY_NIGHT), DAY_SUNRISE);
 }
 
 static void test_moon_phase(void) {

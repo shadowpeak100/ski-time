@@ -118,7 +118,8 @@ static Daypart current_daypart(int h, int m) {
   return MOCK_DAYPART;
 #else
   const Settings *st = settings_get();
-  return daypart_for(st->daypart_mode, h * 60 + m, s_sun_rise, s_sun_set, st->fixed_rise, st->fixed_set);
+  return daypart_for(st->daypart_mode, h * 60 + m, s_sun_rise, s_sun_set, st->fixed_rise, st->fixed_set,
+                      st->daypart_fixed);
 #endif
 }
 
@@ -142,7 +143,8 @@ static void apply_theme(void) {
 #ifdef MOCK_WEATHER
   scene_set_weather(MOCK_WEATHER);
 #elif defined(PBL_PLATFORM_EMERY)
-  scene_set_weather(settings_get()->weather_on ? wx_from_wmo(s_wx.wmo) : WX_CLEAR);
+  const Settings *st = settings_get();
+  scene_set_weather(st->weather_on ? wx_from_wmo(s_wx.wmo) : (WxKind)(st->wx_fixed <= WX_STORM ? st->wx_fixed : WX_CLEAR));
 #endif
 }
 
@@ -162,7 +164,7 @@ static void rest_timer_cb(void *data) {
 
 // The only place the rest timer is registered: Full mode, moving weather, no minute animation.
 static void rest_timer_update(void) {
-  bool want = s_layer && s_mode == ANIM_FULL && !s_anim && settings_get()->weather_on && wx_moves(scene_weather());
+  bool want = s_layer && s_mode == ANIM_FULL && !s_anim && wx_moves(scene_weather());
   if (!want) rest_timer_cancel();
   else if (!s_rest_timer) {
     const uint32_t c = now_ms() % 5000;
@@ -398,7 +400,7 @@ static void init(void) {
 #endif
   update_health();
   app_message_register_inbox_received(inbox_received);
-  app_message_open(160, 16);
+  app_message_open(192, 16);
 }
 
 int main(void) {

@@ -97,6 +97,8 @@ function loadCfg() {
     var saved = JSON.parse(localStorage.getItem('cfg') || '{}');
     for (k in saved) if (saved[k] !== undefined) cfg[k] = saved[k];
   } catch (e) { logErr('loadCfg', e); }
+  if (cfg.dayMode === 2) { cfg.dayCycle = false; cfg.dayMode = 0; cfg.dayFixed = 1; }   // the old "Always midday"
+  cfg.dayMode = +cfg.dayMode; cfg.dayFixed = +cfg.dayFixed; cfg.wxFixed = +cfg.wxFixed;
   return cfg;
 }
 

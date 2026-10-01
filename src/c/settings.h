@@ -22,6 +22,8 @@ typedef struct {
   uint16_t fixed_rise, fixed_set;    // minutes-of-day, used in fixed mode
   uint8_t  anim_mode;                // AnimMode
   uint8_t  weather_on;
+  uint8_t  daypart_fixed;            // Daypart, used in static mode
+  uint8_t  wx_fixed;                 // WxKind, used when weather_on is 0
 } Settings;
 
 void settings_load(void);

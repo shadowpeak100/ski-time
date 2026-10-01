@@ -16,8 +16,9 @@ Design spec: `docs/superpowers/specs/2026-09-29-ski-time-design.md`.
 
 ## Time of day
 
-The **Time of day** setting ("Sky follows") has three modes: follow the real sunrise and sunset, fixed
-sunrise and sunset times, or always midday. Follow mode uses sunrise and sunset from Open-Meteo,
+The **Daylight cycle** switch turns the changing sky on or off. When on, "Cycle follows" picks the real
+sunrise and sunset or fixed sunrise and sunset times. When off, "Show" pins the sky to Sunrise, Midday,
+Sunset or Night. The real sunrise and sunset come from Open-Meteo,
 fetched by the phone with the weather and kept on the watch. Until the first sync it assumes 07:00 and 19:00.
 Basalt keeps the themes, moon and stars; the night extras and slope trees are Emery only.
 Spec: `docs/superpowers/specs/2026-09-29-times-of-day-design.md`.
@@ -28,7 +29,7 @@ On Emery the sky shows the forecast weather: clouds, overcast, fog, drizzle, rai
 with a lightning bolt. A new weather applies at the next minute change. Basalt does not draw weather, but it still honours the Animations setting, including Battery saver.
 Spec: `docs/superpowers/specs/2026-09-30-weather-design.md`.
 
-- **Show weather**: turns the weather scene off.
+- **Weather**: turns the forecast scene off. When off, "Show" pins one weather (clear to thunderstorm). A pinned weather still follows Animations.
 - **Animations**:
   - Full: rain, drizzle and snow fall, and the bolt flickers. This may use more battery.
   - Balanced (default): the minute change is animated, but precipitation is held still and the bolt stays on.

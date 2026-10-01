@@ -1,7 +1,7 @@
 {
   "name": "ski-time",
   "author": "ShadowPeak100",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {},
@@ -19,7 +19,8 @@
       "TIME_24H", "LEAD_ZERO", "TRACK_STYLE",
       "SAVER_ON", "SAVER_START", "SAVER_END",
       "DAYPART_MODE", "SUN_FIXED_RISE", "SUN_FIXED_SET", "SUNRISE", "SUNSET",
-      "ANIM_MODE", "WEATHER_ON", "WX_CODE", "WIND_X"
+      "ANIM_MODE", "WEATHER_ON", "WX_CODE", "WIND_X",
+      "DAYPART_FIXED", "WX_FIXED"
     ],
     "resources": { "media": [] }
   }
