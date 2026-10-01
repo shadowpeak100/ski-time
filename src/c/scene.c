@@ -102,8 +102,9 @@ static void pine(GContext *ctx, float x, float base, float h) {
   rect(ctx, fb_round(x - 0.5f), fb_round(base - h * 0.16f), 1, iceil(h * 0.16f), GColorBulgarianRose);
   for (int i = 0; i < 3; i++) {
     float top = base - h + i * h * 0.27f, bot = top + h * 0.46f, hw = h * (0.2f + i * 0.1f), th = bot - top;
+    // Whole tier in shade first: gpath leaves the shared centre edge unfilled.
+    fb_fill_tri(ctx, x - hw, bot, x, top, x + hw, bot, gcol(tm->pine_shade));
     fb_fill_tri(ctx, x - hw, bot, x, top, x, bot, gcol(tm->pine_lit));
-    fb_fill_tri(ctx, x, top, x + hw, bot, x, bot, gcol(tm->pine_shade));
     const float snow[8] = { x, top, x - hw * 0.55f, top + th * 0.55f, x - hw * 0.2f, top + th * 0.42f,
                             x + hw * 0.25f, top + th * 0.45f };
     poly(ctx, snow, 4, gcol(tm->pine_snow));
