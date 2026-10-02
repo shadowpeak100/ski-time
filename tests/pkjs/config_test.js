@@ -22,15 +22,25 @@ assert.strictEqual(e.wmo, 0); assert.strictEqual(e.wind, 0);
 
 var makeCanvas = require('./stub_dom.js').makeCanvas;
 
+function stubEl(id) {
+  var kids = [], text = '';
+  return { id: id, style: {}, value: '', children: kids,
+    get textContent() { return text; },
+    set textContent(v) { text = v; if (v === '') kids.length = 0; },
+    appendChild: function(c) { kids.push(c); },
+    setAttribute: function() {}, addEventListener: function() {} };
+}
+
 function runPage(c, env, opt) {
   opt = opt || {};
   var page = config.buildHtml(c, env);
   var els = {}, raf = [], ids = page.match(/id="([^"]+)"/g).map(function(s) { return s.slice(4, -1); });
   ids.forEach(function(id) {
-    els[id] = id === 'pv' ? makeCanvas() : { id: id, style: {}, value: '', setAttribute: function() {}, addEventListener: function() {} };
+    els[id] = id === 'pv' ? makeCanvas() : stubEl(id);
   });
   var win = {
-    document: { getElementById: function(id) { if (!els[id]) throw new Error('missing #' + id); return els[id]; } },
+    document: { getElementById: function(id) { if (!els[id]) throw new Error('missing #' + id); return els[id]; },
+      createElement: function(tag) { var e = stubEl(''); e.tagName = tag; return e; } },
     location: {},
     requestAnimationFrame: opt.noRaf ? undefined : function(f) { raf.push(f); return raf.length; },
     cancelAnimationFrame: function() {},
@@ -39,8 +49,8 @@ function runPage(c, env, opt) {
   };
   if (opt.nullCtx) els.pv.getContext = function() { return null; };
   var js = page.match(/<script>([\s\S]*)<\/script>/)[1];
-  new Function('window', 'document', 'location', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance',
-    js + ';window.CFG=CFG;window.SkiPreview=SkiPreview;')(win, win.document, win.location, win.requestAnimationFrame, win.cancelAnimationFrame, win.performance);
+  new Function('window', 'document', 'location', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'XMLHttpRequest',
+    js + ';window.CFG=CFG;window.SkiPreview=SkiPreview;')(win, win.document, win.location, win.requestAnimationFrame, win.cancelAnimationFrame, win.performance, opt.XMLHttpRequest);
   return { els: els, raf: raf, win: win, page: page };
 }
 
@@ -161,5 +171,49 @@ assert.strictEqual(lp2.win.CFG.animLen, 255, 'slider snaps to recommended');
 var lp3 = runPage(cfg({ animMode: 2 }), envE);
 assert.strictEqual(lp3.els.animLenR.disabled, true);
 assert.strictEqual(lp3.els.animLenN.disabled, true);
+
+assert.strictEqual(config.geoUrl('Park City'), 'https://geocoding-api.open-meteo.com/v1/search?name=Park%20City&count=5&language=en&format=json');
+assert.strictEqual(config.geoUrl('a&b=c'), 'https://geocoding-api.open-meteo.com/v1/search?name=a%26b%3Dc&count=5&language=en&format=json');
+assert.strictEqual(config.placeLabel({ name: 'Park City', admin1: 'Utah', country: 'United States' }), 'Park City, Utah, United States');
+assert.strictEqual(config.placeLabel({ name: 'Monaco', country: 'Monaco' }), 'Monaco, Monaco');
+assert.strictEqual(config.DEFAULTS.locAuto, true);
+assert.strictEqual(config.DEFAULTS.locLat, null);
+
+// Location UI: hidden when auto, shown when off; search results render as text; picking sets cfg; Save fixes up.
+function xhrStub(respond) {   // respond(url) -> {status, body} | 'error'
+  return function() {
+    var x = this; x.open = function(m, u) { x.url = u; };
+    x.send = function() { var r = respond(x.url); if (r === 'error') { x.onerror && x.onerror(); return; }
+      x.status = r.status; x.responseText = r.body; x.onload && x.onload(); };
+  };
+}
+var lp4 = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return { status: 200, body: JSON.stringify({ results: [
+  { name: 'Park <City>', admin1: 'Utah', country: 'United States', latitude: 40.646, longitude: -111.498 },
+  { name: 'Park City', country: 'Canada', latitude: 50.1, longitude: -100.2 }] }) }; }) });
+assert.strictEqual(lp4.els.locManual.style.display, 'none', 'manual location hidden while auto');
+lp4.els.locAuto_off.onclick();
+assert.notStrictEqual(lp4.els.locManual.style.display, 'none', 'manual location shown when off');
+assert(/Pick a place/.test(lp4.els.locNote.textContent), 'warns when no place chosen');
+lp4.els.locQ.value = 'Park City'; lp4.els.locFind.onclick();
+var items = lp4.els.locList.children;
+assert.strictEqual(items.length, 2);
+assert.strictEqual(items[0].textContent, 'Park <City>, Utah, United States', 'rendered as text');
+assert(!items[0].innerHTML || items[0].innerHTML.indexOf('<City>') < 0, 'not injected as HTML');
+items[0].onclick();
+assert.strictEqual(lp4.win.CFG.locName, 'Park <City>, Utah, United States');
+assert.strictEqual(lp4.win.CFG.locLat, 40.646);
+assert.strictEqual(lp4.win.CFG.locLon, -111.498);
+assert(/Weather for: Park <City>/.test(lp4.els.locSel.textContent));
+
+var lp5 = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return { status: 200, body: '{}' }; }) });
+lp5.els.locAuto_off.onclick(); lp5.els.locQ.value = 'zzz'; lp5.els.locFind.onclick();
+assert.strictEqual(lp5.els.locStatus.textContent, 'No matches');
+lp5.els.save.onclick();
+var saved = JSON.parse(decodeURIComponent(lp5.win.location.href.split('#')[1]));
+assert.strictEqual(saved.locAuto, true, 'off with no place saves as auto');
+
+var lp6 = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return 'error'; }) });
+lp6.els.locAuto_off.onclick(); lp6.els.locQ.value = 'x'; lp6.els.locFind.onclick();
+assert.strictEqual(lp6.els.locStatus.textContent, "Couldn't search — check your connection");
 
 console.log('config tests passed');
