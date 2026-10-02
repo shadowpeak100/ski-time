@@ -105,6 +105,12 @@ static uint32_t now_ms(void) {
   return (uint32_t)s * 1000u + ms;
 }
 
+// Zero if the clock stepped backward.
+static uint32_t anim_elapsed(void) {
+  int32_t d = (int32_t)(now_ms() - s_anim_start_ms);
+  return d < 0 ? 0 : (uint32_t)d;
+}
+
 static bool build_set(SkierSet *set, int h24, int m) {
   DigitSlot slots[4];
   uint8_t n = time_slots(h24, m, settings_get()->time_24h, settings_get()->lead_zero, slots);
@@ -190,7 +196,7 @@ static void anim_stop(void) {
 static void anim_timer_cb(void *data) {
   (void)data;
   s_anim_timer = NULL;
-  uint32_t t = now_ms() - s_anim_start_ms;
+  uint32_t t = anim_elapsed();
   if (t >= anim_len_total_ms(skiers_duration(s_new), settings_get()->anim_len)) {
     anim_stop();
     APP_LOG(APP_LOG_LEVEL_INFO, "heap free at rest %d", (int)heap_bytes_free());
@@ -321,7 +327,7 @@ static void update(Layer *layer, GContext *ctx) {
   uint32_t el = MOCK_ANIM_MS;
   Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
-  uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;
+  uint32_t el = s_anim ? anim_elapsed() : 0;
   s_smoke_ms = s_smoke_base + el;
   Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? anim_len_t(el, skiers_duration(s_new), settings_get()->anim_len) : SKI_REST_MS };
 #endif

@@ -107,19 +107,22 @@ var PAGE_JS = [
 "document.getElementById('locSel').textContent=has?'Weather for: '+CFG.locName:'No place chosen yet';" +
 "document.getElementById('locNote').textContent=!CFG.locAuto&&!has?'Pick a place, or your phone\\'s location will be used.':'';};" +
 "(function(){var Q=document.getElementById('locQ'),F=document.getElementById('locFind'),S=document.getElementById('locStatus'),Li=document.getElementById('locList');" +
-"function find(){var q=(Q.value||'').trim();if(!q)return;S.textContent='Searching\\u2026';Li.textContent='';" +
+"var seq=0;function find(){var q=(Q.value||'').trim();if(!q)return;var my=++seq;S.textContent='Searching\\u2026';Li.textContent='';" +
 "var x=new XMLHttpRequest();x.open('GET',geoUrl(q),true);" +
-"x.onload=function(){var E='Couldn\\'t search \\u2014 check your connection',rs;" +
+"x.onload=function(){if(my!==seq)return;var E='Couldn\\'t search \\u2014 check your connection',rs;" +
 "if(x.status<200||x.status>=300){S.textContent=E;return;}" +
 "try{rs=JSON.parse(x.responseText).results;}catch(e){S.textContent=E;return;}" +
 "if(rs===undefined||rs===null)rs=[];if(!Array.isArray(rs)){S.textContent=E;return;}" +
 "rs=rs.filter(function(r){return r&&typeof r.latitude==='number'&&typeof r.longitude==='number'&&r.name;});" +
 "S.textContent=rs.length?'':'No matches';rs.slice(0,5).forEach(function(r){var b=document.createElement('button');" +
 "b.textContent=placeLabel(r);b.onclick=function(){CFG.locName=placeLabel(r);CFG.locLat=r.latitude;CFG.locLon=r.longitude;syncLoc();};Li.appendChild(b);});};" +
-"x.onerror=function(){S.textContent='Couldn\\'t search \\u2014 check your connection';};x.send();}" +
+"x.onerror=function(){if(my!==seq)return;S.textContent='Couldn\\'t search \\u2014 check your connection';};x.send();}" +
 "F.onclick=find;Q.onkeydown=function(e){if(e&&e.key==='Enter')find();};syncLoc();})();",
 "syncRows();"
 ].join('\n');
+
+// Keeps data from closing the inline script early.
+function scriptJson(v) { return JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'); }
 
 function buildHtml(cfg, env) {
   return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
@@ -194,7 +197,7 @@ toggleRow('Use Battery saver on a schedule', 'saverOn') +
 'Ski Time is free, with no ads. If it\'s useful to you, you can support development. Thank you!</p>' +
 '<a class="kofibtn" href="https://ko-fi.com/shadowpeak100" target="_blank" rel="noopener">&#9749; Buy me a coffee on Ko-fi</a></section>' +
 '</div><div class="bar"><button id="cancel">Cancel</button><button class="save" id="save">Save</button></div>' +
-'<script>var CFG=' + JSON.stringify(cfg) + ';var ENV=' + JSON.stringify(env || envFrom({}, 'emery')) + ';' + PREVIEW_JS + '\n' +
+'<script>var CFG=' + scriptJson(cfg) + ';var ENV=' + scriptJson(env || envFrom({}, 'emery')) + ';' + PREVIEW_JS + '\n' +
   [animTotalMs, animScaledMs, lenFromSlider, lenFromTyped, lenLabel, geoUrl, placeLabel].map(String).join('\n') + '\n' + PAGE_JS + '</script></body></html>';
 }
 

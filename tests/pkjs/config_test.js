@@ -216,7 +216,6 @@ var lp6 = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return 'er
 lp6.els.locAuto_off.onclick(); lp6.els.locQ.value = 'x'; lp6.els.locFind.onclick();
 assert.strictEqual(lp6.els.locStatus.textContent, "Couldn't search — check your connection");
 
-
 // Bad geocoding responses show the error string, never "No matches" or a stuck "Searching".
 var ERR = "Couldn't search — check your connection";
 function searchWith(resp) {
@@ -231,5 +230,27 @@ var lp7 = searchWith({ status: 200, body: JSON.stringify({ results: [
   { name: 'NoLat', longitude: 1 }, { latitude: 1, longitude: 1 }, { name: 'Good', latitude: 2, longitude: 3 }] }) });
 assert.strictEqual(lp7.els.locList.children.length, 1, 'only the valid result is listed');
 assert.strictEqual(lp7.els.locList.children[0].textContent, 'Good');
+
+// Data inlined in the page cannot close the script early.
+var evil = '</script><script>alert(1)</script>';
+var evilCfg = cfg({ locAuto: false, locName: evil, locLat: 1, locLon: 2 });
+assert.strictEqual(config.buildHtml(evilCfg, envE).split('</script>').length - 1, 1, 'only the real closing tag');
+assert.strictEqual(runPage(evilCfg, envE).win.CFG.locName, evil);
+
+// Only the latest search updates the page, even when an older response arrives last.
+var pending = [];
+function deferredXhr() {
+  var x = this; x.open = function(m, u) { x.url = u; };
+  x.send = function() { pending.push(x); };
+}
+var lp8 = runPage(cfg(), envE, { XMLHttpRequest: deferredXhr });
+lp8.els.locAuto_off.onclick();
+lp8.els.locQ.value = 'first'; lp8.els.locFind.onclick();
+lp8.els.locQ.value = 'second'; lp8.els.locFind.onclick();
+function reply(x, name) { x.status = 200; x.responseText = JSON.stringify({ results: [{ name: name, latitude: 1, longitude: 2 }] }); x.onload(); }
+reply(pending[1], 'Second');
+reply(pending[0], 'First');
+assert.strictEqual(lp8.els.locList.children.length, 1);
+assert.strictEqual(lp8.els.locList.children[0].textContent, 'Second');
 
 console.log('config tests passed');
