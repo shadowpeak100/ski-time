@@ -1,4 +1,4 @@
-PURE = $(wildcard ../src/c/geom.c ../src/c/glyphs.c ../src/c/layout.c ../src/c/skier.c ../src/c/avalanche.c ../src/c/saver.c ../src/c/daypart.c ../src/c/theme.c ../src/c/flood.c ../src/c/decor.c ../src/c/weather.c ../src/c/bolt.c)
+PURE = $(wildcard ../src/c/geom.c ../src/c/glyphs.c ../src/c/layout.c ../src/c/skier.c ../src/c/avalanche.c ../src/c/saver.c ../src/c/daypart.c ../src/c/theme.c ../src/c/flood.c ../src/c/decor.c ../src/c/weather.c ../src/c/bolt.c ../src/c/anim_len.c)
 SRCS = host_tests.c trig_host.c $(PURE)
 CFLAGS = -std=c99 -Wall -Werror -O0 -g -DHOST_TEST -I../src/c -I.
 

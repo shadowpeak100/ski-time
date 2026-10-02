@@ -24,6 +24,7 @@ typedef struct {
   uint8_t  weather_on;
   uint8_t  daypart_fixed;            // Daypart, used in static mode
   uint8_t  wx_fixed;                 // WxKind, used when weather_on is 0
+  uint8_t  anim_len;                 // 0 instant, 1..200 tenths of a second, 255 natural
 } Settings;
 
 void settings_load(void);
