@@ -216,4 +216,20 @@ var lp6 = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return 'er
 lp6.els.locAuto_off.onclick(); lp6.els.locQ.value = 'x'; lp6.els.locFind.onclick();
 assert.strictEqual(lp6.els.locStatus.textContent, "Couldn't search — check your connection");
 
+
+// Bad geocoding responses show the error string, never "No matches" or a stuck "Searching".
+var ERR = "Couldn't search — check your connection";
+function searchWith(resp) {
+  var p = runPage(cfg(), envE, { XMLHttpRequest: xhrStub(function() { return resp; }) });
+  p.els.locAuto_off.onclick(); p.els.locQ.value = 'x'; p.els.locFind.onclick();
+  return p;
+}
+assert.strictEqual(searchWith({ status: 200, body: 'not json' }).els.locStatus.textContent, ERR, 'junk body');
+assert.strictEqual(searchWith({ status: 500, body: '{}' }).els.locStatus.textContent, ERR, 'http 500');
+assert.strictEqual(searchWith({ status: 200, body: JSON.stringify({ results: 'x' }) }).els.locStatus.textContent, ERR, 'results not an array');
+var lp7 = searchWith({ status: 200, body: JSON.stringify({ results: [
+  { name: 'NoLat', longitude: 1 }, { latitude: 1, longitude: 1 }, { name: 'Good', latitude: 2, longitude: 3 }] }) });
+assert.strictEqual(lp7.els.locList.children.length, 1, 'only the valid result is listed');
+assert.strictEqual(lp7.els.locList.children[0].textContent, 'Good');
+
 console.log('config tests passed');

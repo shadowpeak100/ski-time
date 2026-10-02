@@ -109,8 +109,11 @@ var PAGE_JS = [
 "(function(){var Q=document.getElementById('locQ'),F=document.getElementById('locFind'),S=document.getElementById('locStatus'),Li=document.getElementById('locList');" +
 "function find(){var q=(Q.value||'').trim();if(!q)return;S.textContent='Searching\\u2026';Li.textContent='';" +
 "var x=new XMLHttpRequest();x.open('GET',geoUrl(q),true);" +
-"x.onload=function(){var rs=[];try{rs=(JSON.parse(x.responseText).results)||[];}catch(e){}" +
-"if(x.status<200||x.status>=300){S.textContent='Couldn\\'t search \\u2014 check your connection';return;}" +
+"x.onload=function(){var E='Couldn\\'t search \\u2014 check your connection',rs;" +
+"if(x.status<200||x.status>=300){S.textContent=E;return;}" +
+"try{rs=JSON.parse(x.responseText).results;}catch(e){S.textContent=E;return;}" +
+"if(rs===undefined||rs===null)rs=[];if(!Array.isArray(rs)){S.textContent=E;return;}" +
+"rs=rs.filter(function(r){return r&&typeof r.latitude==='number'&&typeof r.longitude==='number'&&r.name;});" +
 "S.textContent=rs.length?'':'No matches';rs.slice(0,5).forEach(function(r){var b=document.createElement('button');" +
 "b.textContent=placeLabel(r);b.onclick=function(){CFG.locName=placeLabel(r);CFG.locLat=r.latitude;CFG.locLon=r.longitude;syncLoc();};Li.appendChild(b);});};" +
 "x.onerror=function(){S.textContent='Couldn\\'t search \\u2014 check your connection';};x.send();}" +
