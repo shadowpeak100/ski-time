@@ -117,4 +117,49 @@ runPage(old, config.envFrom({ wx: 'abc' }, 'basalt'));
   } finally { global.setTimeout = realSetTimeout; }
 })();
 
+// Change length helpers (JS twin of src/c/anim_len.c)
+assert.strictEqual(config.DEFAULTS.animLen, 255);
+assert.strictEqual(config.toMessage(cfg()).ANIM_LEN, 255);
+assert.strictEqual(config.toMessage(cfg({ animLen: 0 })).ANIM_LEN, 0);
+assert.strictEqual(config.toMessage(cfg({ animLen: 125 })).ANIM_LEN, 125);
+var oldCfg = cfg(); delete oldCfg.animLen;
+assert.strictEqual(config.toMessage(oldCfg).ANIM_LEN, 255, 'old config without animLen sends natural');
+assert.strictEqual(config.animTotalMs(6000, 255), 6000);
+assert.strictEqual(config.animTotalMs(6000, 20), 2000);
+assert.strictEqual(config.animTotalMs(6000, 0), 0);
+assert.strictEqual(config.animScaledMs(1000, 6000, 20), 3000);
+assert.strictEqual(config.animScaledMs(5000, 6000, 20), 6000);
+assert.strictEqual(config.animScaledMs(1234, 6000, 255), 1234);
+assert.strictEqual(config.lenFromSlider(60), 255);
+assert.strictEqual(config.lenFromSlider(62), 255);
+assert.strictEqual(config.lenFromSlider(63), 63);
+assert.strictEqual(config.lenFromSlider(0), 0);
+assert.strictEqual(config.lenFromSlider(200), 200);
+assert.strictEqual(config.lenFromTyped('', 80), 80);
+assert.strictEqual(config.lenFromTyped('abc', 80), 80);
+assert.strictEqual(config.lenFromTyped('-3', 80), 0);
+assert.strictEqual(config.lenFromTyped('25', 80), 200);
+assert.strictEqual(config.lenFromTyped('6.04', 80), 60);   // typed values never snap
+assert.strictEqual(config.lenFromTyped('12.35', 80), 124);
+assert.strictEqual(config.lenLabel(255), 'About 6 s (recommended)');
+assert.strictEqual(config.lenLabel(0), 'Instant');
+assert.strictEqual(config.lenLabel(125), '12.5 s');
+
+// Page wiring: slider <-> number box, label, disabled in Battery saver
+var lp2 = runPage(cfg(), envE);
+assert(lp2.page.indexOf('id="animLenR"') > 0 && lp2.page.indexOf('id="animLenN"') > 0, 'slider and number box');
+assert(lp2.page.indexOf('Recommended') > 0, 'notch label');
+assert.strictEqual(+lp2.els.animLenR.value, 60);
+lp2.els.animLenR.value = '120'; lp2.els.animLenR.oninput();
+assert.strictEqual(lp2.win.CFG.animLen, 120);
+assert.strictEqual(lp2.els.animLenN.value, '12.0');
+lp2.els.animLenN.value = '3.3'; lp2.els.animLenN.onchange();
+assert.strictEqual(lp2.win.CFG.animLen, 33);
+assert.strictEqual(+lp2.els.animLenR.value, 33);
+lp2.els.animLenR.value = '59'; lp2.els.animLenR.oninput();
+assert.strictEqual(lp2.win.CFG.animLen, 255, 'slider snaps to recommended');
+var lp3 = runPage(cfg({ animMode: 2 }), envE);
+assert.strictEqual(lp3.els.animLenR.disabled, true);
+assert.strictEqual(lp3.els.animLenN.disabled, true);
+
 console.log('config tests passed');
