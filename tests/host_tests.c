@@ -537,6 +537,36 @@ static void test_precip_geometry(void) {
 }
 
 #include "anim_len.h"
+
+#include "mono.h"
+
+// Feeds (seconds, sub-ms) pairs sampled every step_ms of true time, with the seconds counter
+// rolling over `phase` ms after the sub-ms counter, and checks every step is reported exactly.
+static void check_mono_phase(uint16_t phase, uint32_t step_ms) {
+  MonoClock c = { 0 };
+  uint32_t prev = 0;
+  for (uint32_t t = 3000; t < 9000; t += step_ms) {
+    uint32_t s = (t - phase) / 1000;   // seconds lag the sub-ms rollover by `phase`
+    uint16_t sub = t % 1000;
+    uint32_t now = mono_step(&c, s, sub);
+    if (t > 3000) CHECK_EQ_INT((int)(now - prev), (int)step_ms);
+    prev = now;
+  }
+}
+
+static void test_mono(void) {
+  check_mono_phase(0, 40);     // aligned counters
+  check_mono_phase(500, 40);   // seconds roll over mid-way: the emulator's skew
+  check_mono_phase(960, 41);
+  check_mono_phase(500, 100);
+  // A long gap at rest is counted to within a second.
+  MonoClock c = { 0 };
+  uint32_t a = mono_step(&c, 100, 250);
+  uint32_t b = mono_step(&c, 105, 550);   // 5.3 s later
+  CHECK((b - a) >= 4300 && (b - a) <= 5300);
+  // Never goes backwards.
+  CHECK(mono_step(&c, 105, 100) >= b);
+}
 static void test_anim_len(void) {
   // Recommended: natural timing, unscaled.
   CHECK_EQ_INT(anim_len_total_ms(6000, ANIM_LEN_NATURAL), 6000);
@@ -593,6 +623,7 @@ int main(void) {
   test_bolt_geometry();
   test_precip_geometry();
   test_anim_len();
+  test_mono();
   if (g_fail) { fprintf(stderr, "%d failure(s)\n", g_fail); return 1; }
   printf("all host tests passed\n");
   return 0;

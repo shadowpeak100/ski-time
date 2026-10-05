@@ -13,6 +13,7 @@
 #include "theme.h"
 #include "wx_draw.h"
 #include "anim_len.h"
+#include "mono.h"
 
 #define PERSIST_KEY_TEMP_F 0
 #define PERSIST_KEY_SUN 2   // key 1 is Settings
@@ -99,10 +100,11 @@ static void now_hm(int *h, int *m) {
 }
 
 static uint32_t now_ms(void) {
+  static MonoClock clock;
   time_t s;
   uint16_t ms;
   time_ms(&s, &ms);
-  return (uint32_t)s * 1000u + ms;
+  return mono_step(&clock, (uint32_t)s, ms);
 }
 
 // Zero if the clock stepped backward.
