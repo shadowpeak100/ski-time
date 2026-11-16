@@ -295,15 +295,17 @@ static void test_saver_window(void) {
 
 static void test_daypart_windows(void) {
   CHECK_EQ_INT(daypart_at(442, 442, 1158), DAY_SUNRISE);
-  CHECK_EQ_INT(daypart_at(382, 442, 1158), DAY_SUNRISE);   // 60 min before
-  CHECK_EQ_INT(daypart_at(381, 442, 1158), DAY_NIGHT);
-  CHECK_EQ_INT(daypart_at(501, 442, 1158), DAY_SUNRISE);   // 59 min after
-  CHECK_EQ_INT(daypart_at(502, 442, 1158), DAY_MIDDAY);
-  CHECK_EQ_INT(daypart_at(1097, 442, 1158), DAY_MIDDAY);
-  CHECK_EQ_INT(daypart_at(1098, 442, 1158), DAY_SUNSET);
-  CHECK_EQ_INT(daypart_at(1218, 442, 1158), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_at(412, 442, 1158), DAY_SUNRISE);   // 30 min before
+  CHECK_EQ_INT(daypart_at(411, 442, 1158), DAY_NIGHT);
+  CHECK_EQ_INT(daypart_at(471, 442, 1158), DAY_SUNRISE);   // 29 min after
+  CHECK_EQ_INT(daypart_at(472, 442, 1158), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_at(1127, 442, 1158), DAY_MIDDAY);
+  CHECK_EQ_INT(daypart_at(1128, 442, 1158), DAY_SUNSET);   // 30 min before
+  CHECK_EQ_INT(daypart_at(1187, 442, 1158), DAY_SUNSET);   // 29 min after
+  CHECK_EQ_INT(daypart_at(1188, 442, 1158), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(0, 442, 1158), DAY_NIGHT);
-  CHECK_EQ_INT(daypart_at(10, 400, 1410), DAY_SUNSET);     // sunset 23:30: window wraps past midnight
+  CHECK_EQ_INT(daypart_at(10, 400, 1430), DAY_SUNSET);     // sunset 23:50: window wraps past midnight
+  CHECK_EQ_INT(daypart_at(20, 400, 1430), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(60, 1380, 300), DAY_MIDDAY);      // midday window wraps midnight (sunset before sunrise)
   CHECK_EQ_INT(daypart_at(720, 1380, 300), DAY_NIGHT);
   CHECK_EQ_INT(daypart_at(1439, 400, 1410), DAY_SUNSET);

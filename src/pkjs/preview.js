@@ -968,11 +968,12 @@ function skiPreviewFactory() {
   }
 
   // ---------- daypart.c ----------
-  function nearEvent(m, ev) { var d = ((m - ev) % 1440 + 1440) % 1440; return d < 60 || d >= 1380; }
+  var TWILIGHT_MIN = 30;   // mirrors src/c/daypart.c
+  function nearEvent(m, ev) { var d = ((m - ev) % 1440 + 1440) % 1440; return d < TWILIGHT_MIN || d >= 1440 - TWILIGHT_MIN; }
   function daypartAt(m, sr, ss) {
     if (nearEvent(m, sr)) return 0;
     if (nearEvent(m, ss)) return 2;
-    var since = ((m - (sr + 60)) % 1440 + 1440) % 1440, span = ((ss - sr - 120) % 1440 + 1440) % 1440;
+    var since = ((m - (sr + TWILIGHT_MIN)) % 1440 + 1440) % 1440, span = ((ss - sr - 2 * TWILIGHT_MIN) % 1440 + 1440) % 1440;
     return since < span ? 1 : 3;   // wrap-aware: sunset may precede sunrise
   }
   // The watch's DAYPART_MODE is dayCycle ? dayMode : 2 (config.js toMessage); 2 is static and shows dayFixed.

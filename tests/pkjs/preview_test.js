@@ -16,6 +16,13 @@ assert.strictEqual(P.daypartFor(cfg({ dayMode: 2 }), env, 0), 1);               
 assert.strictEqual(P.daypartFor(cfg(), env, 720), 1);
 assert.strictEqual(P.daypartFor(cfg(), env, 0), 3);
 assert.strictEqual(P.daypartFor(cfg({ dayMode: 1, fixedRise: 1200, fixedSet: 300 }), env, 0), 1);   // sunset before sunrise: wrap-aware
+assert.strictEqual(P.daypartFor(cfg(), env, 390), 0);   // sunrise 420: 30 min before
+assert.strictEqual(P.daypartFor(cfg(), env, 389), 3);
+assert.strictEqual(P.daypartFor(cfg(), env, 449), 0);   // 29 min after
+assert.strictEqual(P.daypartFor(cfg(), env, 450), 1);
+assert.strictEqual(P.daypartFor(cfg(), env, 1110), 2);  // sunset 1140: 30 min before
+assert.strictEqual(P.daypartFor(cfg(), env, 1169), 2);
+assert.strictEqual(P.daypartFor(cfg(), env, 1170), 3);
 
 // weatherFor
 assert.strictEqual(P.weatherFor(cfg({ weatherOn: true }), { platform: 'emery', wmo: 63 }), 5);    // rain

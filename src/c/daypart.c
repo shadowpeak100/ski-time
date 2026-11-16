@@ -1,14 +1,17 @@
 #include "daypart.h"
 
+#define TWILIGHT_MIN 30   // sunrise and sunset each show from this long before the event to this long after
+
 static bool near_event(int m, int ev) {
   int d = ((m - ev) % 1440 + 1440) % 1440;
-  return d < 60 || d >= 1380;
+  return d < TWILIGHT_MIN || d >= 1440 - TWILIGHT_MIN;
 }
 
 Daypart daypart_at(int m, uint16_t sr, uint16_t ss) {
   if (near_event(m, sr)) return DAY_SUNRISE;
   if (near_event(m, ss)) return DAY_SUNSET;
-  int since_rise_window = ((m - (sr + 60)) % 1440 + 1440) % 1440, span = ((ss - sr - 120) % 1440 + 1440) % 1440;
+  int since_rise_window = ((m - (sr + TWILIGHT_MIN)) % 1440 + 1440) % 1440,
+      span = ((ss - sr - 2 * TWILIGHT_MIN) % 1440 + 1440) % 1440;
   return since_rise_window < span ? DAY_MIDDAY : DAY_NIGHT;   // wrap-aware: sunset may precede sunrise
 }
 
