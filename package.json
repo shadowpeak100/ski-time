@@ -1,8 +1,8 @@
 {
   "name": "ski-time",
   "author": "ShadowPeak100",
-  "version": "0.1.1",
-  "keywords": ["pebble-app"],
+  "version": "1.0.0",
+  "keywords": ["ski-time", "ski", "cabin"],
   "private": true,
   "dependencies": {},
   "pebble": {
@@ -10,7 +10,7 @@
     "uuid": "8eee9fbc-c7dc-43a8-995b-6b132d6039bf",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "targetPlatforms": ["basalt", "emery"],
+    "targetPlatforms": ["emery"],
     "capabilities": ["location", "configurable", "health"],
     "watchapp": { "watchface": true },
     "messageKeys": [
