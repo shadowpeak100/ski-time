@@ -53,54 +53,59 @@ function windX(speed, dir) {
   return toward >= 180 ? -1 : 1;
 }
 
-function fetchWeather() {
-  navigator.geolocation.getCurrentPosition(
-    function(pos) {
-      var lat = pos.coords.latitude.toFixed(4);
-      var lon = pos.coords.longitude.toFixed(4);
-      var url = 'https://api.open-meteo.com/v1/forecast' +
-                '?latitude=' + lat +
-                '&longitude=' + lon +
-                '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m' +
-                '&temperature_unit=fahrenheit' +
-                '&daily=sunrise,sunset&timezone=auto&forecast_days=1';
-      var req = new XMLHttpRequest();
-      req.open('GET', url, true);
-      req.timeout = REQUEST_TIMEOUT_MS;
-      req.onload = function() {
-        if (req.status >= 200 && req.status < 300) {
-          try {
-            var data = JSON.parse(req.responseText);
-            var t = Math.round(data.current.temperature_2m);
-            var msg = { TEMP_F: t };
-            var code = data.current.weather_code;
-            if (typeof code === 'number' && isFinite(code) && code % 1 === 0 && code >= 0 && code <= 99) msg.WX_CODE = code;
-            var wind = windX(data.current.wind_speed_10m, data.current.wind_direction_10m);
-            if (wind !== null) msg.WIND_X = wind;
-            var rise = data.daily && data.daily.sunrise && data.daily.sunrise[0];
-            var set = data.daily && data.daily.sunset && data.daily.sunset[0];
-            if (rise && set) {
-              var sr = minutesOfDay(rise), ss = minutesOfDay(set);
-              if (isFinite(sr) && isFinite(ss) && sr >= 0 && sr < 1440 && ss >= 0 && ss < 1440) {
-                msg.SUNRISE = sr;
-                msg.SUNSET = ss;
-              }
-            }
-            cachePreview(msg);
-            sendWeather(msg);
-          } catch (e) { logErr('parse', e); }
-        } else {
-          logErr('http', req.status);
+function requestWeather(lat, lon) {
+  lat = (+lat).toFixed(4);
+  lon = (+lon).toFixed(4);
+  var url = 'https://api.open-meteo.com/v1/forecast' +
+            '?latitude=' + lat +
+            '&longitude=' + lon +
+            '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m' +
+            '&temperature_unit=fahrenheit' +
+            '&daily=sunrise,sunset&timezone=auto&forecast_days=1';
+  var req = new XMLHttpRequest();
+  req.open('GET', url, true);
+  req.timeout = REQUEST_TIMEOUT_MS;
+  req.onload = function() {
+    if (req.status >= 200 && req.status < 300) {
+      try {
+        var data = JSON.parse(req.responseText);
+        var t = Math.round(data.current.temperature_2m);
+        var msg = { TEMP_F: t };
+        var code = data.current.weather_code;
+        if (typeof code === 'number' && isFinite(code) && code % 1 === 0 && code >= 0 && code <= 99) msg.WX_CODE = code;
+        var wind = windX(data.current.wind_speed_10m, data.current.wind_direction_10m);
+        if (wind !== null) msg.WIND_X = wind;
+        var rise = data.daily && data.daily.sunrise && data.daily.sunrise[0];
+        var set = data.daily && data.daily.sunset && data.daily.sunset[0];
+        if (rise && set) {
+          var sr = minutesOfDay(rise), ss = minutesOfDay(set);
+          if (isFinite(sr) && isFinite(ss) && sr >= 0 && sr < 1440 && ss >= 0 && ss < 1440) {
+            msg.SUNRISE = sr;
+            msg.SUNSET = ss;
+          }
         }
-      };
-      req.onerror = function() { logErr('network', null); };
-      req.ontimeout = function() { logErr('timeout', null); };
-      req.send();
-    },
-    function(err) { logErr('geo', err); },
-    { timeout: REQUEST_TIMEOUT_MS, maximumAge: 10 * 60 * 1000 }
-  );
+        cachePreview(msg);
+        sendWeather(msg);
+      } catch (e) { logErr('parse', e); }
+    } else {
+      logErr('http', req.status);
+    }
+  };
+  req.onerror = function() { logErr('network', null); };
+  req.ontimeout = function() { logErr('timeout', null); };
+  req.send();
 }
+
+// Weather location: a place chosen on the settings page, else the phone's own position.
+function weatherCoords(cb) {
+  var cfg = loadCfg();
+  if (!cfg.locAuto && typeof cfg.locLat === 'number' && typeof cfg.locLon === 'number') { cb(cfg.locLat, cfg.locLon); return; }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) { cb(pos.coords.latitude, pos.coords.longitude); },
+    function(err) { logErr('geo', err); },
+    { timeout: REQUEST_TIMEOUT_MS, maximumAge: 10 * 60 * 1000 });
+}
+function fetchWeather() { weatherCoords(requestWeather); }
 
 Pebble.addEventListener('ready', function() {
   console.log('[ski-time] pkjs ready');
@@ -132,8 +137,10 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var cfg;
   try { cfg = JSON.parse(decodeURIComponent(e.response)); }
   catch (err) { logErr('parse config', err); return; }
+  var prev = loadCfg();
   localStorage.setItem('cfg', JSON.stringify(cfg));
   Pebble.sendAppMessage(config.toMessage(cfg),
     function() { console.log('[ski-time] settings sent'); },
     function(err) { logErr('settings send', err); });
+  if (prev.locAuto !== cfg.locAuto || prev.locLat !== cfg.locLat || prev.locLon !== cfg.locLon) fetchWeather();
 });

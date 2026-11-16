@@ -5,8 +5,9 @@
 #define PHASE1_SETTINGS_SIZE 12
 #define PHASE2_SETTINGS_SIZE 16
 #define PHASE3_SETTINGS_SIZE 18
+#define PHASE4_SETTINGS_SIZE 20
 
-_Static_assert(sizeof(Settings) == 20, "persisted layout changed: add a migration size");
+_Static_assert(sizeof(Settings) == 22, "persisted layout changed: add a migration size");
 
 static Settings s;
 
@@ -25,13 +26,14 @@ static const Settings DEFAULTS = {
   .weather_on = 1,
   .daypart_fixed = 1,   // DAY_MIDDAY
   .wx_fixed = 0,        // WX_CLEAR
+  .anim_len = 255,      // ANIM_LEN_NATURAL
 };
 
 void settings_load(void) {
   int n = persist_exists(PERSIST_KEY_SETTINGS) ? persist_get_size(PERSIST_KEY_SETTINGS) : 0;
   s = DEFAULTS;
-  if (n != (int)sizeof(Settings) && n != PHASE3_SETTINGS_SIZE && n != PHASE2_SETTINGS_SIZE && n != PHASE1_SETTINGS_SIZE) return;
-  persist_read_data(PERSIST_KEY_SETTINGS, &s, n);   // the phase 1 to 3 layouts are exact prefixes of this one
+  if (n != (int)sizeof(Settings) && n != PHASE4_SETTINGS_SIZE && n != PHASE3_SETTINGS_SIZE && n != PHASE2_SETTINGS_SIZE && n != PHASE1_SETTINGS_SIZE) return;
+  persist_read_data(PERSIST_KEY_SETTINGS, &s, n);   // the phase 1 to 4 layouts are exact prefixes of this one
   if (n == PHASE1_SETTINGS_SIZE) s.daypart_mode = 0;   // was the pad byte before saver_start
   if (n != (int)sizeof(Settings)) persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
 }
@@ -67,6 +69,7 @@ bool settings_apply_message(DictionaryIterator *it) {
   changed |= set_u8(it, MESSAGE_KEY_WEATHER_ON, &s.weather_on);
   changed |= set_u8(it, MESSAGE_KEY_DAYPART_FIXED, &s.daypart_fixed);
   changed |= set_u8(it, MESSAGE_KEY_WX_FIXED, &s.wx_fixed);
+  changed |= set_u8(it, MESSAGE_KEY_ANIM_LEN, &s.anim_len);
   if (changed) persist_write_data(PERSIST_KEY_SETTINGS, &s, sizeof(Settings));
   return changed;
 }

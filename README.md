@@ -36,6 +36,8 @@ Spec: `docs/superpowers/specs/2026-09-30-weather-design.md`.
   - Balanced (default): the minute change is animated, but precipitation is held still and the bolt stays on.
   - Battery saver: held still, the minute change is instant, and seconds show `-`.
 - **Use Battery saver on a schedule** (off by default): inside the chosen window (default 22:00 to 07:00) the face uses Battery saver.
+- **Location**: choose "Use my location", or search for a town and pick it. The weather and sun times follow the chosen place. The location stays on the phone; only the weather it fetches goes to the watch.
+- **Change length**: 0 to 20 s. Recommended keeps the natural length of each minute change. 0 is instant. The slider snaps to Recommended near 6 s. Battery saver always changes instantly.
 
 These build defines are for screenshots and testing only. To capture weather screenshots, add `MOCK_WEATHER=0..7` (clear, partly cloudy, overcast, fog, drizzle, rain, snow,
 storm) and `MOCK_ANIM_MODE=0..2` (Full, Balanced, saver) to the build:

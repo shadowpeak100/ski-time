@@ -20,7 +20,7 @@
       "SAVER_ON", "SAVER_START", "SAVER_END",
       "DAYPART_MODE", "SUN_FIXED_RISE", "SUN_FIXED_SET", "SUNRISE", "SUNSET",
       "ANIM_MODE", "WEATHER_ON", "WX_CODE", "WIND_X",
-      "DAYPART_FIXED", "WX_FIXED"
+      "DAYPART_FIXED", "WX_FIXED", "ANIM_LEN"
     ],
     "resources": { "media": [] }
   }

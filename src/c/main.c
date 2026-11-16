@@ -12,6 +12,8 @@
 #include "daypart.h"
 #include "theme.h"
 #include "wx_draw.h"
+#include "anim_len.h"
+#include "mono.h"
 
 #define PERSIST_KEY_TEMP_F 0
 #define PERSIST_KEY_SUN 2   // key 1 is Settings
@@ -98,10 +100,17 @@ static void now_hm(int *h, int *m) {
 }
 
 static uint32_t now_ms(void) {
+  static MonoClock clock;
   time_t s;
   uint16_t ms;
   time_ms(&s, &ms);
-  return (uint32_t)s * 1000u + ms;
+  return mono_step(&clock, (uint32_t)s, ms);
+}
+
+// Zero if the clock stepped backward.
+static uint32_t anim_elapsed(void) {
+  int32_t d = (int32_t)(now_ms() - s_anim_start_ms);
+  return d < 0 ? 0 : (uint32_t)d;
 }
 
 static bool build_set(SkierSet *set, int h24, int m) {
@@ -189,8 +198,8 @@ static void anim_stop(void) {
 static void anim_timer_cb(void *data) {
   (void)data;
   s_anim_timer = NULL;
-  uint32_t t = now_ms() - s_anim_start_ms;
-  if (t >= skiers_duration(s_new)) {
+  uint32_t t = anim_elapsed();
+  if (t >= anim_len_total_ms(skiers_duration(s_new), settings_get()->anim_len)) {
     anim_stop();
     APP_LOG(APP_LOG_LEVEL_INFO, "heap free at rest %d", (int)heap_bytes_free());
     return;
@@ -263,7 +272,7 @@ static void tick_handler(struct tm *tm, TimeUnits changed) {
   if (hm == s_last_min) return;
   s_last_min = hm;
 #ifndef MOCK_ANIM_MS
-  if (s_saver) rebuild_current();
+  if (s_saver || settings_get()->anim_len == 0) rebuild_current();
   else anim_start();
 #endif
 }
@@ -320,9 +329,9 @@ static void update(Layer *layer, GContext *ctx) {
   uint32_t el = MOCK_ANIM_MS;
   Frame f = { s_old, s_new, MOCK_ANIM_MS };
 #else
-  uint32_t el = s_anim ? now_ms() - s_anim_start_ms : 0;
+  uint32_t el = s_anim ? anim_elapsed() : 0;
   s_smoke_ms = s_smoke_base + el;
-  Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? (uint16_t)(el < 65534 ? el : 65534) : SKI_REST_MS };
+  Frame f = { s_anim ? s_old : NULL, s_new, s_anim ? anim_len_t(el, skiers_duration(s_new), settings_get()->anim_len) : SKI_REST_MS };
 #endif
   bool rebuilt = render_frame(ctx, &f);
 #ifndef MOCK_ANIM_MS
@@ -360,7 +369,7 @@ static AppTimer *s_intro_timer;
 static void intro_cb(void *data) {
   (void)data;
   s_intro_timer = NULL;
-  if (!s_saver && !s_anim) anim_start();
+  if (!s_saver && !s_anim && settings_get()->anim_len != 0) anim_start();
 }
 
 static void window_load(Window *w) {
