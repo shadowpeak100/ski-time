@@ -1,9 +1,28 @@
 # Ski Time
 
+![Ski Time: carve your time](screenshots/banner_720x320.png)
+
 A Pebble watch face for basalt (Pebble Time) and emery (Pebble Time 2). A ski slope falls from the
 top right to the bottom left, and small skiers carve the time into the snow as curly script digits.
 Each minute the old skiers ski out, an avalanche clears the slope, and new skiers draw the new time. The same animation plays one second after the face opens (except in Battery saver).
 Design spec: `docs/superpowers/specs/2026-09-29-ski-time-design.md`.
+
+## Screenshots
+
+Emery (Pebble Time 2), native 200×228.
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/emery_minute-change.gif" alt="Minute change animation"><br>Minute change</td>
+    <td align="center"><img src="screenshots/emery_1_midday_clear.png" alt="Midday, clear"><br>Midday</td>
+    <td align="center"><img src="screenshots/emery_2_sunrise_partly-cloudy.png" alt="Sunrise, partly cloudy"><br>Sunrise, partly cloudy</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/emery_3_sunset_clear.png" alt="Sunset, clear"><br>Sunset</td>
+    <td align="center"><img src="screenshots/emery_4_night_clear.png" alt="Night, clear"><br>Night</td>
+    <td align="center"><img src="screenshots/emery_5_midday_storm.png" alt="Midday, storm"><br>Storm</td>
+  </tr>
+</table>
 
 ## Features
 
